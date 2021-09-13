@@ -1,0 +1,4 @@
+import math 
+
+COMM_RANGE = 250
+DROP_RANGE = 500
