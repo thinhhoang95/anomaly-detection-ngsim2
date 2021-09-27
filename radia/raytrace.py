@@ -22,14 +22,15 @@ def isNeighborRayOff(pos1, ang1, pos2):
         sphere_radar_visible = False
     
     if dist<rd.FRADAR_RADIUS:
-        bearing = np.arctan2(posx[1],posx[0])/np.pi*180 # global bearing 
-        logging.log(25, 'Bearing: ' + str(bearing))
-        delta_alpha = ang.degdiff(bearing, ang1)
-        logging.log(25, 'Delta Alpha: ' + str(delta_alpha))
-        if np.abs(delta_alpha) < rd.FRADAR_HALF_ANGLE:
-            front_radar_visible = True
-        else:
-            front_radar_visible = False
+        front_radar_visible = True
+        # bearing = np.arctan2(posx[1],posx[0])/np.pi*180 # global bearing 
+        # logging.log(25, 'Bearing: ' + str(bearing))
+        # delta_alpha = ang.degdiff(bearing, ang1)
+        # logging.log(25, 'Delta Alpha: ' + str(delta_alpha))
+        # if np.abs(delta_alpha) < rd.FRADAR_HALF_ANGLE:
+        #     front_radar_visible = True
+        # else:
+        #     front_radar_visible = False
     else:
         front_radar_visible = False
 
@@ -144,25 +145,27 @@ def frontRadarRayTrace(host, globs): # globs: global objects
     # Sort the global objects with respect to the Euclidean distance
     sorted_globs = sorted(globs, key=lambda x: np.linalg.norm(x.posx - pos1))
     # Perform ray tracing for each individual objects in the global array of vehicles
-    ray_min = ang.roundang(ang1 - rd.FRADAR_FULL_ANGLE/2)
-    ray_max = ang.roundang(ang1 + rd.FRADAR_FULL_ANGLE/2)
+    # All will be in host's coordinate system
+    ray_min = ang.roundang(- rd.FRADAR_FULL_ANGLE/2) + 90
+    ray_max = ang.roundang(rd.FRADAR_FULL_ANGLE/2) + 90
     ray_min, ray_max = ang.sort_increase((ray_min, ray_max))
     free_angles = [(ray_min, ray_max)]
     for obj in sorted_globs: 
         if (obj.id == host.id):
             continue # skip the current iteration
         center = obj.posx 
-
-        front, _ = isNeighborRayOff(pos1, ang1, center)
+        # Eliminate too far away targets for speeded up calculations
+        front, _ = isNeighborRayOff(pos1, ang1, center) 
+        if host.id == 679 and obj.id == 690:
+            print('Host: ', host.posx, ', Object: ', obj.posx)
         if not front:
             continue
 
-        bearing = obj.orientation
-
+        # bearing = obj.orientation
         relative_center = obj.posx - host.posx
         relative_bearing = ang.roundang(obj.orientation - host.orientation)
         # Find 4 corners of the objects
-        corners = getCorners(relative_center, relative_bearing)
+        corners = getCorners(relative_center, relative_bearing) # in the host's coordinate system
         objectRays = ang.roundang2(getObjectRays(corners))
         objectRays = ang.sort_increase(objectRays)
         new_free_angles = []
@@ -174,14 +177,18 @@ def frontRadarRayTrace(host, globs): # globs: global objects
                 new_free_angles.append((free_angle[0], objectRays[0]))
                 new_free_angles.append((objectRays[1], free_angle[1]))
                 host.addNeighbor(obj.id)
-            elif ang.degdiff(objectRays[1],free_angle[0])>=0 and ang.degdiff(objectRays[0],free_angle[0])<=0:
+            elif ang.degdiff(objectRays[1],free_angle[1])>=0 and ang.degdiff(objectRays[0],free_angle[0])>=0 and ang.degdiff(objectRays[0],free_angle[1])<=0:
             # elif objectRays[1]>=free_angle[0] and objectRays[0]<=free_angle[0]:
                 # The object is partially present on the left
-                new_free_angles.append((objectRays[1], free_angle[1]))
-            elif ang.degdiff(objectRays[1],free_angle[1])>=0 and ang.degdiff(objectRays[0],free_angle[1])<=0:
+                #print('Object presents on the left')
+                host.addNeighbor(obj.id) # maybe we should add a threshold on 
+                new_free_angles.append((free_angle[0], objectRays[0]))
+            elif ang.degdiff(objectRays[0],free_angle[0])<=0 and ang.degdiff(objectRays[1],free_angle[1]) and ang.degdiff(objectRays[1],free_angle[0])>=0:
             # elif objectRays[1]>=free_angle[1] and objectRays[0]<=free_angle[1]:
                 # The object is partially present on the right
-                new_free_angles.append((free_angle[0], objectRays[0]))
+                #print('Object presents on the right')
+                host.addNeighbor(obj.id)
+                new_free_angles.append((objectRays[1], free_angle[1]))
             elif ang.degdiff(objectRays[0],free_angle[1])>=0 or ang.degdiff(objectRays[1],free_angle[0])<=0:
             # elif objectRays[0]>=free_angle[1] or objectRays[1]<=free_angle[0]:
                 # The object is outside of the region of interest

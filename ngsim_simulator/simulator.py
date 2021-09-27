@@ -3,14 +3,15 @@ import pandas as pd
 
 # add radia library to the search directory
 import sys
-sys.path.append("~/Documents/anomaly-detection-ngsim/radia")
-sys.path.append("~/Documents/anomaly-detection-ngsim/otqd")
+sys.path.append("C:\\Users\\nxf67027\\Documents\\anomaly-detection-ngsim")
+# sys.path.append("C:/Users/nxf67027/Documents/anomaly-detection-ngsim/otqd")
 
 from radia.GlobalMapObject import GlobalMapObject as gmo
 from radia import raytrace as rt
 from otqd.otqd import OTQD
 
 import copy
+from radia.visualize_traffic_situation import plot_ngsim_memory
 
 class Simulator:
     def __init__(self, path_to_csv, gtime_start, gtime_duration, offset_x, offset_y, make_first_global_time_zero = True, otqd_on = True):
@@ -83,7 +84,7 @@ class Simulator:
         vehicle_array = []
         for vehicle_id in vehicle_ids:
             vehicle_row = df_at_gtime[df_at_gtime['Vehicle_ID'] == vehicle_id].iloc[0]
-            vehicle = gmo(vehicle_row.Vehicle_ID, (vehicle_row.Local_X, vehicle_row.Local_Y), vehicle_row.Vehicle_EKF_Velocity, vehicle_row.Vehicle_EKF_Accel, vehicle_row.Vehicle_EKF_Theta)
+            vehicle = gmo(vehicle_row.Vehicle_ID, (vehicle_row.Local_X, vehicle_row.Local_Y), vehicle_row.Vehicle_EKF_Velocity, vehicle_row.Vehicle_EKF_Accel, vehicle_row.Vehicle_EKF_Theta + np.pi/2)
             vehicle_array.append(vehicle)
         return vehicle_array
 
@@ -117,7 +118,18 @@ class Simulator:
             if vehicle.id in vehicles_appeared:
                 vehicle_array_with_mem.append(vehicle)
 
-        # thirdly, append the state of neighbors acquired from the current scan
+        # thirdly, update the state of the vehicles in the vehicle_array_with_mem
+        for vehicle_mem in vehicle_array_with_mem:
+            for vehicle in vehicle_array: 
+                if vehicle.id == vehicle_mem.id:
+                    vehicle_mem.posx = vehicle.posx 
+                    vehicle_mem.orientation = vehicle.orientation
+                    vehicle_mem.spd = vehicle.spd
+                    vehicle_mem.acc = vehicle.acc 
+                    vehicle_mem.neighbors = vehicle.neighbors
+                    # Do NOT transfer the memory!
+
+        # fourthly, append the state of neighbors acquired from the current scan
         for index, vehicle in enumerate(vehicle_array_with_mem):
             for neighbor_id in vehicle_array[index].neighbors:
                 neighbor_state = self.find_state_in_vehicle_array(neighbor_id, vehicle_array)
