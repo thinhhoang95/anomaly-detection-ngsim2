@@ -1,4 +1,5 @@
 import numpy as np 
+import math
 
 class OTQD:
     def __init__(self, info_a, mu_a, info_e2, pca_mean, pca_components, i_max = 1, i_spacing = 10):
@@ -32,7 +33,8 @@ class OTQD:
         return (self.pca_mean[t], self.pca_components[t,:])
     
     def new_measurement(self, x):
-        for i in range(self.i_max): # i: delay for the PCA values
+        real_i_max = min(self.i_max, math.floor(((self.pca_components.shape[0] - self.t)/self.i_spacing)))
+        for i in range(real_i_max): # i: delay for the PCA values
             mean_t, pca_components_t = self.get_pca_at_t(self.t + i * self.i_spacing)
             pca_components_t = pca_components_t.reshape((-1,1))
             CX = self.info_e2 * np.matmul(pca_components_t, pca_components_t.transpose()) # should yield a n x n matrix, NOT a scalar
@@ -69,8 +71,8 @@ class OTQD:
     def calculate_log_likelihood(self):
         covar_bare = np.linalg.inv(self.info_a)
         # print('DBG: Covar bare: ', covar_bare)
-        likelihood = np.zeros((self.i_max,))
-        likelihood_w = np.zeros((self.i_max,))
+        likelihood = np.zeros((self.i_max,)) - np.inf
+        likelihood_w = np.zeros((self.i_max,)) - np.inf
         for i in range(self.i_max):
             #print('Delay i = ', i)
             covar_prime = np.linalg.inv(self.info_prime[i,:,:])

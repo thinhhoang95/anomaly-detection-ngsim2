@@ -1,6 +1,7 @@
 from radia import angutil as ang
 import numpy as np
 from radia import v2x as v2x
+from radia import LetterCA
 import sys
 
 class GlobalMapObject:
@@ -15,7 +16,8 @@ class GlobalMapObject:
         self.acquaintances = []  # communicable via V2X
         self.informs_candidate = [] # objects received but yet to be transmitted (due to loop synchronization, make sure all vehicles are done receiving first)
         self.informs = [] # objects received and ready for transmission
-        self.memory = {} # memory about
+        self.memory = {} # memory about past vehicle trajectories
+        self.otqd_entropy = {} # likelihood of observed trajectories being nominal
 
     def __eq__(self, other):
         if not isinstance(other, GlobalMapObject):
