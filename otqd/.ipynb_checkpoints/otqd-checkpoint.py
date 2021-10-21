@@ -1,4 +1,5 @@
 import numpy as np 
+import math
 
 class OTQD:
     def __init__(self, info_a, mu_a, info_e2, pca_mean, pca_components, i_max = 1, i_spacing = 10):
@@ -32,6 +33,8 @@ class OTQD:
         return (self.pca_mean[t], self.pca_components[t,:])
     
     def new_measurement(self, x):
+        real_i_max = min(self.i_max, math.floor(((self.pca_components.shape[0] - self.t)/self.i_spacing)))
+        # may change back to real_i_max?
         for i in range(self.i_max): # i: delay for the PCA values
             mean_t, pca_components_t = self.get_pca_at_t(self.t + i * self.i_spacing)
             pca_components_t = pca_components_t.reshape((-1,1))
@@ -43,6 +46,7 @@ class OTQD:
             self.info_prime[i,:,:] += CX 
             self.mu_pre_prime[i,:,:] += CD
             self.preresidual[i] += iota_t 
+        # print(np.max(self.preresidual))
         self.t += 1
 
     def calculate_likelihood(self):
@@ -69,8 +73,9 @@ class OTQD:
     def calculate_log_likelihood(self):
         covar_bare = np.linalg.inv(self.info_a)
         # print('DBG: Covar bare: ', covar_bare)
-        likelihood = np.zeros((self.i_max,))
-        likelihood_w = np.zeros((self.i_max,))
+        likelihood = np.zeros((self.i_max,)) - np.inf
+        likelihood_w = np.zeros((self.i_max,)) - np.inf
+        # print('i_max', self.i_max)
         for i in range(self.i_max):
             #print('Delay i = ', i)
             covar_prime = np.linalg.inv(self.info_prime[i,:,:])
@@ -86,3 +91,35 @@ class OTQD:
             likelihood_w[i] = self.preresidual[i]
             # print('---')
         return likelihood
+    
+    def calculate_log_likelihood_with_covar(self):
+        covar_bare = np.linalg.inv(self.info_a)
+        # print('DBG: Covar bare: ', covar_bare)
+        likelihood = np.zeros((self.i_max,)) - np.inf
+        #likelihood_w = np.zeros((self.i_max,)) - np.inf
+        covars = np.zeros((self.i_max,2,2))
+        
+        for i in range(self.i_max):
+            #print('Delay i = ', i)
+            covar_prime = np.linalg.inv(self.info_prime[i,:,:])
+            #print('DBG: Covar prime ', covar_prime)
+            mu_prime = covar_prime @ self.mu_pre_prime[i,:,:]
+            #print('mu pprime', self.mu_pre_prime[i,:,:])
+            #print('mu prime ', mu_prime)
+            residual = self.preresidual[i] - mu_prime.transpose() @ self.info_prime[i,:,:] @ mu_prime
+            #print('DBGRAW: ', self.preresidual[i])
+            #print('DBGRES: ', -.5 * residual)
+            #print('DBG: ', mu_prime.transpose() @ self.info_prime[i,:,:] @ mu_prime)
+            #print('DBG: Preresidual ', self.preresidual[i])
+            #print('DBG: Preresidual minus ', mu_prime.transpose() @ self.info_prime[i,:,:] @ mu_prime)
+            # print('DBG: Residual ', residual)
+            likelihood[i] = -self.t * np.log(self.info_e2) + .5 * np.log(np.linalg.det(covar_prime)/np.linalg.det(covar_bare)) -.5 * residual
+            #print(- mu_prime.transpose() @ self.info_prime[i,:,:] @ mu_prime)
+            # likelihood[i] = -.5 * residual
+            #likelihood_w[i] = self.preresidual[i]
+            covars[i,:,:] = covar_prime
+            # print('---')
+        return likelihood, covars
+    
+    def get_for_debug(self):
+        return self.preresidual
