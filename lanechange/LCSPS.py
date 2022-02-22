@@ -6,7 +6,7 @@ from BasisExtender import extend_basis
 
 class LCSPS:
     # Linear Combination of Stochastic Process Segmentation in Time Series (LC-SPS)
-    def __init__(self, mu_a, sigma_a, sigma_e, kl_mean, kl_basis, h_lambda) -> None:
+    def __init__(self, mu_a, sigma_a, sigma_e, kl_mean, kl_basis) -> None:
         self.mu_a = mu_a 
         self.sigma_a = sigma_a 
         self.sigma_e = sigma_e 
@@ -17,7 +17,6 @@ class LCSPS:
         self.kl_length = np.shape(kl_basis)[0]
         self.x = []
         self.t = -1
-        self.h_lambda = h_lambda
 
         self.prtxt = np.zeros((55,55)) # should be large enough to contain the whole time series!
         self.prtxt[0,0] = 1 # run = 0, at no data, proba is 1
@@ -91,8 +90,8 @@ class LCSPS:
             # although written here as k we find the index for changepoint k+1 (since k starts from 0)
             hypotheses = []
             hypotheses_indices = []
-            for i in range(ck[k-1]+1, x_vec_len - 1): # the changepoint cannot coincide with the last datum
-                first_seq_id_from = ck[k-1]+1
+            for i in range(int(ck[k-1]+1), x_vec_len - 1): # the changepoint cannot coincide with the last datum
+                first_seq_id_from = int(ck[k-1]+1)
                 first_seq_id_to = i # inclusive
                 second_seq_id_from = i+1 
                 second_seq_id_to = x_vec_len-1 # inclusive
@@ -104,4 +103,4 @@ class LCSPS:
                 # second_seq = self.x[second_seq_id_from:second_seq_id_to+1]
             arghypot = np.argmax(np.array(hypotheses))
             ck[k] = hypotheses_indices[arghypot]
-
+        return ck
