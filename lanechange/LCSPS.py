@@ -3,6 +3,7 @@ import numpy as np
 from scipy.stats import norm
 from scipy.stats import expon
 from BasisExtender import extend_basis
+from matplotlib import pyplot as plt
 
 class LCSPS:
     # Linear Combination of Stochastic Process Segmentation in Time Series (LC-SPS)
@@ -27,7 +28,7 @@ class LCSPS:
         self.x.append(x)
         self.t += 1
 
-    def marginalize_repr_a(self, x, mu_a, sigma_a, sigma_e, kl_t = 0, kl_length = 0, log_result = False) -> Number:
+    def marginalize_repr_a(self, x, mu_a, sigma_a, sigma_e, kl_t = 0, kl_length = 0, log_result = False, plot_x = False) -> Number:
         # note that x is subtracted by mean_curve already
         info_a = np.linalg.inv(sigma_a)
         info_e_squared = np.square(1/sigma_e)
@@ -35,12 +36,19 @@ class LCSPS:
         # the x vector is longer than the basis temporal size, we must extend the basis to match the x vector
         if x_length > self.kl_length:
             F = extend_basis(self.kl_basis, x_length)
+            M = extend_basis(self.kl_mean, x_length)
         else: # x_length is <= basis_length, we just trim the basis!
             if kl_t > 0:
                 # we do not start from the "beginning" of the KL basis, but rather from kl_t
                 F = self.kl_basis[kl_t:kl_t+kl_length,:]
+                M = self.kl_mean[kl_t:kl_t+kl_length,:]
             else:
                 F = self.kl_basis[0:x_length,:] # so now it will be like [140, 20]
+                M = self.kl_mean[0:x_length]
+        x = x - M # removing the mean
+        if plot_x:
+            plt.figure()
+            plt.plot(x)
         # new covariance matrix
         info_S = info_a + F.T @ F * info_e_squared
         S = np.linalg.inv(info_S)
@@ -60,7 +68,7 @@ class LCSPS:
     def hazard(self, t) -> Number: # use Planck (i.e., discrete exponential distribution with parameter lambda as interval prior)
         return expon.pdf(t, scale=1/self.h_lambda) / (1 - expon.pdf(t, scale=1/self.h_lambda))
 
-    def marginalize_repr_all_subseqs(self):
+    def marginalize_repr_all_subseqs(self, plot_x=False):
         # calculate the marginal distribution p(x_{ij}) of every single substrings i, j
         # setup the data vector
         x_vec = np.array(self.x)
@@ -76,8 +84,17 @@ class LCSPS:
             for j in range(j_from, j_to):
                 x = x_vec[i:j+1].reshape((-1,1))
                 # next we are going to marginalize this x vector against the kl_basis
-                p[i,j], _, __, ___, ____ = self.marginalize_repr_a(x, self.mu_a, self.sigma_a, self.sigma_e)
+                p[i,j], _, __, ___, ____ = self.marginalize_repr_a(x, self.mu_a, self.sigma_a, self.sigma_e, log_result=True, plot_x=plot_x)
                 # print(i,j,p[i,j])
+        return p
+
+    def marginalize_repr_subseq(self, i, j, plot_x=False, lane_start=53.0):
+        x_vec = np.array(self.x)
+        x_vec_len = np.shape(self.x)[0]
+        x = x_vec[i:j+1].reshape((-1,1)) - lane_start
+        # next we are going to marginalize this x vector against the kl_basis
+        p, _, __, ___, ____ = self.marginalize_repr_a(x, self.mu_a, self.sigma_a, self.sigma_e, log_result=True, plot_x=plot_x)
+        # print(i,j,p[i,j])
         return p
 
     def get_change_point(self, p, K = 1):
