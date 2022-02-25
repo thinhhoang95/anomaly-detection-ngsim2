@@ -88,10 +88,10 @@ class LCSPS:
                 # print(i,j,p[i,j])
         return p
 
-    def marginalize_repr_subseq(self, i, j, plot_x=False, lane_start=53.0):
+    def marginalize_repr_subseq(self, i, j, plot_x=False):
         x_vec = np.array(self.x)
         x_vec_len = np.shape(self.x)[0]
-        x = x_vec[i:j+1].reshape((-1,1)) - lane_start
+        x = x_vec[i:j+1].reshape((-1,1)) - x_vec[i]
         # next we are going to marginalize this x vector against the kl_basis
         p, _, __, ___, ____ = self.marginalize_repr_a(x, self.mu_a, self.sigma_a, self.sigma_e, log_result=True, plot_x=plot_x)
         # print(i,j,p[i,j])
@@ -101,23 +101,35 @@ class LCSPS:
         x_vec_len = np.shape(self.x)[0]
         # we sequentially find all changepoints, limited by the upper variable K 
         ck = np.zeros((K+2,)) # all changepoints are 1-based, not zero-based
+        ck_llh = np.zeros((K+2,))
         ck[0] = -1
         ck[-1] = self.t - 1
         for k in range(1,K+1): # k from 1 to K
             # although written here as k we find the index for changepoint k+1 (since k starts from 0)
             hypotheses = []
             hypotheses_indices = []
+            hypotheses_t1 = []
+            hypotheses_t2 = []
             for i in range(int(ck[k-1]+1), x_vec_len - 1): # the changepoint cannot coincide with the last datum
                 first_seq_id_from = int(ck[k-1]+1)
                 first_seq_id_to = i # inclusive
                 second_seq_id_from = i+1 
                 second_seq_id_to = x_vec_len-1 # inclusive
+                hypotheses_t1.append([first_seq_id_from, first_seq_id_to])
+                hypotheses_t2.append([second_seq_id_from, second_seq_id_to])
                 p_first_seq = p[first_seq_id_from, first_seq_id_to]
                 p_second_seq = p[second_seq_id_from, second_seq_id_to]
                 hypotheses.append(p_first_seq + p_second_seq)
                 hypotheses_indices.append(i)
+
                 # first_seq = self.x[first_seq_id_from:first_seq_id_to+1] #inclusive
                 # second_seq = self.x[second_seq_id_from:second_seq_id_to+1]
             arghypot = np.argmax(np.array(hypotheses))
+
             ck[k] = hypotheses_indices[arghypot]
-        return ck
+            ck_llh[k] = hypotheses[arghypot]
+            first_t = hypotheses_t1[arghypot]
+            second_t = hypotheses_t2[arghypot]
+            print('Changepoint placement k={}: {}'.format(k, first_t))
+            print('Changepoint placement k={}: {}'.format(k, second_t))
+        return ck, ck_llh, first_t, second_t
