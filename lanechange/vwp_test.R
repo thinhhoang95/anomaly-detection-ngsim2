@@ -55,64 +55,59 @@ plot(basis)
 mu0 <- 3.0
 var0 <- 3.0
 
+# Cluster params
+cmu <- c(mu0)
+cvar <- c(var0)
+
+# All the changepoints
+cp <- list()
+
 # We create an x_cut object which contains all the segments when cutting the x_mat time series
 x_cut <- list()
 
+# We create an "attribution" object which indicates the cluster that each segment belongs to
+attr <- matrix(, nrow=nrow(x_mat), ncol=10) # 10 is the maximum number of changepoints in each time series
+
+# Originally, this object will just be a duplicate of x_mat, all the original time series not cut
 for (ts in 1:nrow(x_mat))
 {
   x_cut <- append(x_cut, list(x_mat[ts,]))
 }
 
-rows_to_skip_in_x_cut <- nrow(x_mat)
-# We first consider a random, unoptimized changepoint placement at each time series
-for (its in 1:length(x_cut))
+# Then we place random changepoints among the time series
+for (ts_index in 1:length(x_cut))
 {
-  ts <- x_cut[[its]]
-  ts_length = length(ts)
-  change_at <- sample(1:ts_length, 1)
-  if (change_at < 2 | change_at > ts_length - 2)
-  {
-    # the sampled changepoint is too close to the beginning or the end of the time series
-    # just leave the time series as is
-    x_cut <- append(x_cut, list(ts))
-  } 
-  else
-  {
-    x_cut <- append(x_cut, list(ts[1:(change_at - 1)]))
-    x_cut <- append(x_cut, list(ts[change_at:ts_length]))
-  }
+  ts_length <- length(x_cut[[ts_index]])
+  change_at <- sample(2:ts_length-1, 1)
+  # cp[ts_index] <- list(append(cp[[ts_index]], change_at))
+  cp[ts_index] <- list(change_at)
 }
 
-# Since all the time series in the beginning has been cut, let's remove them from the 
-# original x_cut
-x_cut <- tail(x_cut, -rows_to_skip_in_x_cut)
+# We can cut our original time series according to cp
+x_cut <- cut_x_with_cp(x_cut, cp)
+# Assign the initial cluster of each segment, just assign to the same cluster for now
+attr[, 1] <- 1
+attr[, 2] <- 1
+# Number of cluster
+Nattr <- 1
 
-# So up to this moment, we have a bunch of segments randomly cut from the dataset,
-# we will calculate its representations (a*)
+# Then we can perform the clustering process, according to the Chinese Restaurant Process
 
-# 
-a_cut <- list()
-a_likely_cut <- list()
-assignment <- rep(1,length(x_cut))
-cluster_means <- list(c(0.))
-cluster_var <- list(c(0.2))
+max_iter <- 15000 # max iter per clustering attempt
 
-# We can start the Chinese Restaurant Process to begin the clustering process
+# Each cluster will try to "engulf" the segment's a and see its mean and variance shifted
+# to posterior mean and variance values
 
-
-tau_x <- 10 # 1/tau_x = sigma_x^2, precision of measurement - or model's belief about the noise
-
-for (i in 1:length(x_cut))
+for (ts_index in 1:length(x_cut))
 {
-  ts <- x_cut[[i]]
-  ts_length = length(ts)
-  lss = least_square(ts, basis)
-  # Regression coefficients
-  lssb <- as.vector(lss$b) # a*
-  a_cut <- append(a_cut, list(lssb))
-  # Homogeneity measurement: likelihood of a* generating measurements
-  # First, reconstruct the "supposed" ts from a*
-  ts_ref <- as.vector(reconstruct(ts, lssb, basis))
-  # Compare the ts and ts_ref time by time
-  a_likely_cut[i] <- 1./ts_length * (-0.5) * tau_x * sum((ts_ref - ts)^2)
+  for (segment_index in a_cut[[ts_index]])
+  {
+    segment <- a_cut[[ts_index]][[segment_index]]
+    segment_a <- least_square(segment, basis)$b
+    seatings <- n_customers_at_each_table(attr)
+    table_of_current_customer <- attr[ts_index, segment_index]
+    # First we un-seat the current customer (or segment) from his table
+    seatings[table_of_current_customer] <- seatings[table_of_current_customer] - 1
+    # If the unseated customer turns out to be the last one sitting at that table, we 
+  }
 }
