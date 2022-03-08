@@ -4,8 +4,8 @@ least_square <- function(x, basis)
   # right part so that it has a length equals to x
   basis <- basis[1:length(x)]
   # the design matrix
-  col_of_ones <- rep(1, length(basis))
-  X <- cbind(col_of_ones, basis)
+  # col_of_ones <- rep(1, length(basis))
+  X <- basis
   # the response matrix
   Y <- x
   # get the least square solution
@@ -22,9 +22,10 @@ reconstruct <- function(x, b, basis)
 }
 
 # To return the segments cut according to cp
-cut_x_with_cp <- function(x_cut, cp)
+cut_x_with_cp <- function(x_cut, cp, basis)
 {
   x_cut_result <- list()
+  a_cut_result <- list()
   for (ts_index in 1:length(x_cut))
   {
     ts <- x_cut[[ts_index]]
@@ -36,17 +37,20 @@ cut_x_with_cp <- function(x_cut, cp)
       current_changepoint <- extended_cp[i]
       next_changepoint <- extended_cp[i+1]
       ts_to_append <- ts[current_changepoint:(next_changepoint - 1)]
+      segment_a <- least_square(ts_to_append, basis)$b
       if (i==1)
       {
         x_cut_result[ts_index] <- list(ts_to_append) # nothing yet at the row ts_index we are selecting of x_cut_result
+        a_cut_result[ts_index] <- list(segment_a)
       }
       else
       {
         x_cut_result[ts_index] <- list(append(list(x_cut_result[[ts_index]]), list(ts_to_append)))
+        a_cut_result[ts_index] <- list(append(list(a_cut_result[[ts_index]]), list(segment_a)))
       }
     }
   }
-  return(x_cut_result)
+  return(list("x_cut" = x_cut_result, "a_cut" = a_cut_result))
 }
 
 n_customers_at_each_table <- function(attr)
