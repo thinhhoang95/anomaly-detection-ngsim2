@@ -55,7 +55,7 @@ cut_x_with_cp <- function(x_cut, cp, basis)
 
 n_customers_at_each_table <- function(attr)
 {
-  result <- rep(0, ncol(attr))
+  result <- rep(0, max(attr))
   t_attr <- table(attr)
   t_attr_label <- as.numeric(names(t_attr))
   for (i in 1:length(attr))

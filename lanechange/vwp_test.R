@@ -56,9 +56,13 @@ mu0 <- 3.0
 var0 <- 3.0
 tau0 <- solve(var0)
 
+# Measurement variance
+vary <- 0.05
+tauy <- solve(vary)
+
 # Cluster params
 cmu <- c(mu0)
-cvar <- c(var0)
+# cvar <- c(var0) # we don't actually use this because in the simplest case, we just assume a fixed variance for each cluster
 
 # All the changepoints
 cp <- list()
@@ -102,9 +106,8 @@ for (ts_index in 1:length(x_cut))
 {
   for (segment_index in a_cut[[ts_index]])
   {
-    segment <- a_cut[[ts_index]][[segment_index]]
-    segment_a <- least_square(segment, basis)$b
     seatings <- n_customers_at_each_table(attr)
+    a_of_customer <- a_cut[[ts_index]][[segment_index]]
     table_of_current_customer <- attr[ts_index, segment_index]
     # First we un-seat the current customer (or segment) from his table
     seatings[table_of_current_customer] <- seatings[table_of_current_customer] - 1
@@ -122,15 +125,18 @@ for (ts_index in 1:length(x_cut))
     # Each cluster will try to "engulf" the segment's a and see its mean and variance shifted
     # to posterior mean and variance values
     
+    # This variable holds the proba of all tables that the customer is going to sit in
+    p_sit_at_table <- rep(0, Nattr+1)
     for (table in 1:(Nattr+1))
     {
       if (table <= Nattr)
       {
+        
         # Sit with others
         # Calculate posterior values
         # The current mean and variance
-        current_mean <- cmu[table]
-        current_var <- cvar[table]
+        # current_mean <- mu0 # actually not used
+        current_var <- var0 # use the fixed variance for cluster in this version of code
         nk <- seatings[table]
         tauk <- solve(current_var)
         # Run a loop to calculate the sum of data of the current cluster
@@ -145,16 +151,36 @@ for (ts_index in 1:length(x_cut))
             }
           }
         } # Calculation of cluster_sum completed
-        
+        sigp <- nk * tauk + tau0
+        taup <- solve(sigp)
+        new_mean <- taup * (tauk * cluster_sum + mu0 * tau0)
+        new_var <- sigp + vary
+        new_sd <- sqrt(new_var)
+        N_seatings <- sum(seatings)
+        # The likelihood of "sitting at an occupied table" is
+        p_sit_at_occupied <- nk / (N_seatings - 1 + alpha)
+        # Replace a_of_customer is the line below if we want to also account for the homogeneity of the measurements
+        # here it works like the most basic HDP-GMM (that doesn't even account for )
+        p_sit_at_table_k <- p_sit_at_occupied * dnorm(a_of_customer, mean=new_mean, sd=new_sd)
+        p_sit_at_table[table] <- p_sit_at_table_k
       } else 
       {
         # Open a new table
+        p_sit_at_unoccupied <- alpha / (N_seatings - 1 + alpha)
+        new_sd <- sqrt(vary + var0)
+        p_sit_at_table_Kplus1 <- p_sit_at_unoccupied * dnorm(a_of_customer, mean=mu0, sd=new_sd)
+        p_sit_at_table[table] <- p_sit_at_table_Kplus1
       }
-      
-      # Dirichlet
-      ni <- seatings[table]
-      n <- sum(seatings)
-      p_sit_with_others <- ni/(n - 1 + alpha)
+    } # end of loop through all tables
+    # Normalize the p_sit_at_table
+    p_sit_at_table <- p_sit_at_table / sum(p_sit_at_table)
+    # Sample the new table for this customer to sit (including opening new one)
+    table_to_sit <- sample(1:Nattr+1, 1, replace=T, prob=p_sit_at_table)
+    attr[ts_index][segment_index] <- table_to_sit
+    if (table_to-sit == Nattr+1)
+    {
+      # The customer has decided upon opening a new table
+      Nattr <- Nattr + 1 # increase the number of tables (i.e., clusters) by 1
     }
   }
 }
