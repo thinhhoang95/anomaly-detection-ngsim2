@@ -64,3 +64,73 @@ n_customers_at_each_table <- function(attr)
   }
   return(result)
 }
+
+log_p_homogeneity <- function(x, basis, a, vary)
+{
+  # if the basis length is larger than the vector length, just trim off the
+  # right part so that it has a length equals to x
+  basis <- basis[1:length(x)]
+  tauy <- solve(vary)
+  return(-1/2 * tauy * (t(x) %*% x - 2 * t(matrix(x)) %*% matrix(basis) %*% a + t(a) %*% t(basis) %*% basis %*% matrix(a)))
+}
+
+get_number_of_changepoints <- function(cp)
+{
+  result <- rep(0, length(cp))
+  for (i in 1:length(cp))
+  {
+    result[i] <- length(cp[i])
+  }
+  return(result)
+}
+
+n_customers_at_each_table_cp <- function(Ncp, max_cp)
+{
+  result <- rep(0, max_cp)
+  t_attr <- table(Ncp)
+  for (i in 1:max_cp)
+  {
+    if (!is.na(t_attr[i]))
+    {
+      result[i] <- t_attr[i]
+    }
+  }
+  return(result)
+}
+
+cp_range <- function(n_length_ts, current_cp_index, current_cp)
+{
+  cp_range <- (current_cp_index + 1) : (n_length_ts - current_cp_index - 1)
+  return(cp_range[which(cp_range > current_cp)])
+}
+
+# I don't know why but it seems to miss 2 from the n_length_ts. Consider adding 2 when calling this function!
+append_cp_recursively <- function(cp_list, vec, n_length_ts, current_cp_index, max_cp_index, current_cp)
+{
+  cat('Index/Value: ', current_cp_index, current_cp, '\n')
+  if (current_cp_index <= max_cp_index)
+  {
+    current_cp_range <- cp_range(n_length_ts, current_cp_index, current_cp)
+    if (length(current_cp_range) > 0)
+    {
+      if (current_cp <= tail(current_cp_range, n=1))
+      {
+        
+        current_cp <- head(current_cp_range, n=1)
+        cat('-> Index/Value: ', current_cp_index, current_cp, '\n')
+        
+        # cat('Index/Value: ', current_cp_index, current_cp, '\n')
+        # There are still things to add in this index
+        vec[current_cp_index] <- current_cp
+        if (current_cp_index == max_cp_index)
+        {
+          cp_list <- append(cp_list, list(vec))
+        }
+        cp_list <- append_cp_recursively(cp_list, vec, n_length_ts, current_cp_index + 1, max_cp_index, current_cp)
+        # We try to add changepoint current_cp + 1
+        cp_list <- append_cp_recursively(cp_list, vec, n_length_ts, current_cp_index, max_cp_index, current_cp)
+      }
+    }
+  }
+  return(cp_list)
+}
