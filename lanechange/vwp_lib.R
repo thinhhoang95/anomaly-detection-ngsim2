@@ -166,7 +166,7 @@ find_most_likely_partitioning_of_a_time_series <- function(ts_length, Ncp, cmu, 
   p_cp_placement <- rep(0, length(cp_placements))
   for (l in 1:length(cp_placements))
   {
-    cp_placement <- cp_placements[l]
+    cp_placement <- cp_placements[[l]]
     cp_placement_extended <- c(1, cp_placement, ts_length + 1)
     for (i in 1:(length(cp_placement)+1))
     {

@@ -65,10 +65,6 @@ tau0 <- solve(var0)
 vary <- 0.05
 tauy <- solve(vary)
 
-# Cluster params
-# cmu <- c(mu0) # if we want we could store the cluster mean in an auxiliary variable, but let's just leave it out for the moment
-# cvar <- c(var0) # we don't actually use this because in the simplest case, we just assume a fixed variance for each cluster
-
 # All the changepoints
 cp <- list()
 Ncp <- 1
@@ -84,18 +80,22 @@ for (ts in 1:nrow(x_mat))
 
 # The number of maximum segments one time series can have
 Ncp_max <- 10
+
+# Cluster params
+cmu <- rep(mu0, Ncp_max) # if we want we could store the cluster mean in an auxiliary variable, but let's just leave it out for the moment
+cvar <- var0 # we don't actually use this because in the simplest case, we just assume a fixed variance for each cluster
+ctau <- solve(cvar)
+
 # We create an "attribution" object which indicates the cluster that each segment belongs to (this is for the second CRP
 # where we group the segments into the cluster
 attr <- matrix(, nrow=nrow(x_mat), ncol=Ncp_max) # 10 is the maximum number of segments in each time series
 attr[, 1] <- 1
 Nattr_cp <- max(attr, na.rm=T)
 alpha_cp <- 2 # the rate at which the time series will decide to open a larger number of changepoints that other time series has not yet considered
+Ncp_of_each_ts <- get_number_of_changepoints(cp)
 
 # == End of Initialization of the Dirichlet Process ==
 # ==
-
-
-Ncp_of_each_ts <- get_number_of_changepoints(cp)
 
 for (ts_index in 1:length(x_cut))
 {
@@ -204,6 +204,7 @@ for (iter in 1:max_iter)
           taup <- nk * tauk + tau0
           sigp <- solve(taup)
           new_mean <- sigp * (tauk * cluster_sum + mu0 * tau0)
+          cmu[table] <- new_mean
           new_var <- sigp + vary
           new_sd <- sqrt(new_var)
           N_seatings <- sum(seatings)
