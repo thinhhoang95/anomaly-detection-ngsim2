@@ -52,6 +52,10 @@ plot(basis)
 #
 # =================
 
+
+
+# == Initialization of the Dirichlet Process ==
+# ==
 # Cluster base distribution
 mu0 <- 1.0
 var0 <- 1.0
@@ -67,17 +71,57 @@ tauy <- solve(vary)
 
 # All the changepoints
 cp <- list()
+Ncp <- 1
 
 # We create an x_cut object which contains all the segments when cutting the x_mat time series
 x_cut <- list()
-
-# We create an "attribution" object which indicates the cluster that each segment belongs to
-attr <- matrix(, nrow=nrow(x_mat), ncol=10) # 10 is the maximum number of changepoints in each time series
 
 # Originally, this object will just be a duplicate of x_mat, all the original time series not cut
 for (ts in 1:nrow(x_mat))
 {
   x_cut <- append(x_cut, list(x_mat[ts,]))
+}
+
+# The number of maximum segments one time series can have
+Ncp_max <- 10
+# We create an "attribution" object which indicates the cluster that each segment belongs to (this is for the second CRP
+# where we group the segments into the cluster
+attr <- matrix(, nrow=nrow(x_mat), ncol=Ncp_max) # 10 is the maximum number of segments in each time series
+attr[, 1] <- 1
+Nattr_cp <- max(attr, na.rm=T)
+alpha_cp <- 2 # the rate at which the time series will decide to open a larger number of changepoints that other time series has not yet considered
+
+# == End of Initialization of the Dirichlet Process ==
+# ==
+
+
+Ncp_of_each_ts <- get_number_of_changepoints(cp)
+
+for (ts_index in 1:length(x_cut))
+{
+  # == Step 1: Setting a new number of changepoints for the current TS ==
+  # Get the seatings of each number of changepoints
+  cp_seatings <- n_customers_at_each_table_cp(Ncp_of_each_ts, Ncp_max)
+  # We first unseat the current time series
+  table_of_current_ts <- Ncp_of_each_ts[ts_index]
+  cp_seatings[table_of_current_ts] <- cp_seatings[table_of_current_ts] - 1
+  # We run a fake Chinese Restaurant Process for the current time series to choose
+  # the number of changepoints cp_table
+  for (cp_table in 1:(Nattr_cp+1))
+  {
+    if (cp_table <= Nattr_cp)
+    {
+      # Calculate proba that the time series will open a higher number of changepoints that
+      # other time series yet to consider
+      nk_cp <- cp_seatings[cp_table]
+      N_seatings_cp <- sum(cp_seatings)
+      p_sit_with_others_cp <- nk_cp / (N_seatings_cp - 1 + alpha_cp)
+    } else {
+      # Calculate proba that the time series will open a higher number of changepoints that
+      # other time series yet to consider
+    }
+  }
+  # == End of step 1: Setting a new number of changepoints for the current TS ==
 }
 
 # Then we place random changepoints among the time series

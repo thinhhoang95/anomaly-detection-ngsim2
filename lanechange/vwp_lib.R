@@ -107,7 +107,7 @@ cp_range <- function(n_length_ts, current_cp_index, current_cp)
 # I don't know why but it seems to miss 2 from the n_length_ts. Consider adding 2 when calling this function!
 append_cp_recursively <- function(cp_list, vec, n_length_ts, current_cp_index, max_cp_index, current_cp)
 {
-  cat('Index/Value: ', current_cp_index, current_cp, '\n')
+  # cat('Index/Value: ', current_cp_index, current_cp, '\n')
   if (current_cp_index <= max_cp_index)
   {
     current_cp_range <- cp_range(n_length_ts, current_cp_index, current_cp)
@@ -117,7 +117,7 @@ append_cp_recursively <- function(cp_list, vec, n_length_ts, current_cp_index, m
       {
         
         current_cp <- head(current_cp_range, n=1)
-        cat('-> Index/Value: ', current_cp_index, current_cp, '\n')
+        # cat('-> Index/Value: ', current_cp_index, current_cp, '\n')
         
         # cat('Index/Value: ', current_cp_index, current_cp, '\n')
         # There are still things to add in this index
@@ -133,4 +133,57 @@ append_cp_recursively <- function(cp_list, vec, n_length_ts, current_cp_index, m
     }
   }
   return(cp_list)
+}
+
+precalculate_a_and_homogeneity <- function(ts, basis, vary)
+{
+  a_array <- array(, dim=c(length(ts), length(ts)))
+  p_array <- array(, dim=c(length(ts), length(ts)))
+  for (i in 1:(length(ts)-1))
+  {
+    for (j in (i+1):length(ts))
+    {
+      # Calculate the slope
+      a <- as.vector(least_square(ts[i:j], basis)$b)
+      a_array[i,j] <- a 
+      # Calculate the homogeneity log likelihood
+      p <- log_p_homogeneity(ts[i:j], basis, a, vary)
+      p_array[i,j] <- p
+    }
+  }
+  return(list("a" = a_array, "p" = p_array))
+}
+
+find_most_likely_partitioning_of_a_time_series <- function(ts_length, Ncp, cmu, ctau, Nattr, precalculated_ah)
+{
+  # ts is the vector of time series
+  # Ncp is the number of changepoints one allowed to have
+  # cmu is the cluster mean
+  # cvar is considered to be a constant for all clusters
+  
+  # Get all possible changepoint placements
+  cp_placements <- append_cp_recursively(list(), rep(0, Ncp), ts_length + 2, 1, Ncp, 0) # the +2 is just a workaround!!! Remember to +2 onto every ts length
+  p_cp_placement <- rep(0, length(cp_placements))
+  for (l in 1:length(cp_placements))
+  {
+    cp_placement <- cp_placements[l]
+    cp_placement_extended <- c(1, cp_placement, ts_length + 1)
+    for (i in 1:(length(cp_placement)+1))
+    {
+      segment_starts_at <- cp_placement_extended[i]
+      segment_ends_at <- cp_placement_extended[i+1] - 1
+      # We get a and homogeneity loglikelihood for the corresponding segment
+      a <- precalculated_ah$a[segment_starts_at, segment_ends_at]
+      # Get the most likely cluster that a belongs to 
+      p_a_in_cluster <- rep(0, Nattr)
+      for (cluster_id in 1:Nattr)
+      {
+        p_a_in_cluster[cluster_id] <- -1/2 * ctau * (a - cmu[cluster_id])^2
+      }
+      lp_homo <- precalculated_ah$p[segment_starts_at, segment_ends_at]
+      p_cp_placement[l] <- lp_homo + max(p_a_in_cluster)
+    }
+  }
+  index_of_best_changepoints <- argmax(p_cp_placement)
+  return(cp_placements[index_of_best_changepoints])
 }
