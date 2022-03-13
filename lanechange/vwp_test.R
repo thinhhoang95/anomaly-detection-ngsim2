@@ -94,11 +94,20 @@ Nattr_cp <- max(attr, na.rm=T)
 alpha_cp <- 2 # the rate at which the time series will decide to open a larger number of changepoints that other time series has not yet considered
 Ncp_of_each_ts <- get_number_of_changepoints(cp)
 
+# Assign the initial cluster of each segment, just assign to the same cluster for now
+attr[, 1] <- 1
+attr[, 2] <- 1
+# Number of cluster
+Nattr <- 1
+# Cluster spawning coefficient
+alpha <- 1
+
 # == End of Initialization of the Dirichlet Process ==
 # ==
 
 for (ts_index in 1:length(x_cut))
 {
+  cat("\n Processing time series ", ts_index)
   # == Step 1: Setting a new number of changepoints for the current TS ==
   # Get the seatings of each number of changepoints
   cp_seatings <- n_customers_at_each_table_cp(Ncp_of_each_ts, Ncp_max)
@@ -107,6 +116,9 @@ for (ts_index in 1:length(x_cut))
   cp_seatings[table_of_current_ts] <- cp_seatings[table_of_current_ts] - 1
   # We run a fake Chinese Restaurant Process for the current time series to choose
   # the number of changepoints cp_table
+  ts_length <- length(x_mat[ts_index,])
+  pah <- precalculate_a_and_homogeneity(x_mat[ts_index,], basis, vary)
+  p_table_cp <- rep(0, Nattr_cp+1)
   for (cp_table in 1:(Nattr_cp+1))
   {
     if (cp_table <= Nattr_cp)
@@ -116,11 +128,28 @@ for (ts_index in 1:length(x_cut))
       nk_cp <- cp_seatings[cp_table]
       N_seatings_cp <- sum(cp_seatings)
       p_sit_with_others_cp <- nk_cp / (N_seatings_cp - 1 + alpha_cp)
+      # We find the optimal segmentation given the number of changepoints equal cp_table
+      part <- find_most_likely_partitioning_of_a_time_series(ts_length, cp_table, cmu, ctau, Nattr, pah)
+      p_table_cp[cp_table] <- exp(part$lp) * p_sit_with_others_cp
+      proposed_cp <- part$cp
     } else {
       # Calculate proba that the time series will open a higher number of changepoints that
       # other time series yet to consider
+      p_sit_with_others_cp <- alpha / (N_seatings_cp - 1 + alpha_cp)
+      part <- find_most_likely_partitioning_of_a_time_series(ts_length, cp_table, cmu, ctau, Nattr, pah)
+      p_table_cp[cp_table] <- exp(part$lp) * p_sit_with_others_cp
+      proposed_cp <- part$cp
     }
+  } # end of looping through all the tables
+  p_table_cp <- p_table_cp / sum(p_table_cp)
+  # Sample the new table for this customer to sit (including opening new one)
+  table_to_sit_cp <- sample(1:(Nattr_cp+1), 1, replace=T, prob=p_table_cp)
+  if (table_to_sit_cp == (Nattr_cp + 1))
+  {
+    Nattr_cp <- Nattr_cp + 1
+    cat("\n Maximum changepoints is now ", Nattr_cp)
   }
+  
   # == End of step 1: Setting a new number of changepoints for the current TS ==
 }
 
@@ -137,13 +166,6 @@ for (ts_index in 1:length(x_cut))
 xa_cut <- cut_x_with_cp(x_cut, cp, basis)
 x_cut <- xa_cut$x_cut
 a_cut <- xa_cut$a_cut
-# Assign the initial cluster of each segment, just assign to the same cluster for now
-attr[, 1] <- 1
-attr[, 2] <- 1
-# Number of cluster
-Nattr <- 1
-# Cluster spawning coefficient
-alpha <- 1
 
 max_iter <- 1000 # max iter per clustering attempt
 pb = txtProgressBar(min = 0, max = max_iter, initial = 0)

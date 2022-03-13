@@ -141,7 +141,7 @@ precalculate_a_and_homogeneity <- function(ts, basis, vary)
   p_array <- array(, dim=c(length(ts), length(ts)))
   for (i in 1:(length(ts)-1))
   {
-    for (j in (i+1):length(ts))
+    for (j in i:length(ts))
     {
       # Calculate the slope
       a <- as.vector(least_square(ts[i:j], basis)$b)
@@ -181,9 +181,9 @@ find_most_likely_partitioning_of_a_time_series <- function(ts_length, Ncp, cmu, 
         p_a_in_cluster[cluster_id] <- -1/2 * ctau * (a - cmu[cluster_id])^2
       }
       lp_homo <- precalculated_ah$p[segment_starts_at, segment_ends_at]
-      p_cp_placement[l] <- lp_homo + max(p_a_in_cluster)
+      p_cp_placement[l] <- p_cp_placement[l] + lp_homo + max(p_a_in_cluster)
     }
   }
-  index_of_best_changepoints <- argmax(p_cp_placement)
-  return(cp_placements[index_of_best_changepoints])
+  index_of_best_changepoints <- which.max(p_cp_placement)
+  return(list("cp" = cp_placements[[index_of_best_changepoints]], "lp" = p_cp_placement[index_of_best_changepoints]))
 }
