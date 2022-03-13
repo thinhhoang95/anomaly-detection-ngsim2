@@ -5,12 +5,12 @@
 #
 # =================
 source("~/Documents/anomaly-detection-ngsim/lanechange/vwp_lib.R")
-x_sample <- rep(0,30)
+x_sample <- rep(0,15)
 x_mat <- matrix(, nrow=0, ncol = length(x_sample))
 slopes <- c(1,3,1,3,1,3,1,3)
 zero_period <- 12
 rise_period <- 5
-for (s in 1:20)
+for (s in 1:20) # total number of time series to generate
 {
   slope_id <- 1 # to use different slopes at different rising periods
   for (t in 1:length(x_sample))
@@ -56,6 +56,7 @@ plot(basis)
 
 # == Initialization of the Dirichlet Process ==
 # ==
+
 # Cluster base distribution
 mu0 <- 1.0
 var0 <- 1.0
@@ -67,7 +68,6 @@ tauy <- solve(vary)
 
 # All the changepoints
 cp <- list()
-Ncp <- 1
 
 # We create an x_cut object which contains all the segments when cutting the x_mat time series
 x_cut <- list()
@@ -80,36 +80,54 @@ for (ts in 1:nrow(x_mat))
 
 # The number of maximum segments one time series can have
 Ncp_max <- 10
+# The maximum number of clusters each segment can take
+Ncluster_max <- 10
+
+# Number of current clusters (i.e., tables that all segments might sit)
+Nattr <- 1
+# Cluster spawning coefficient
+alpha <- 1
 
 # Cluster params
-cmu <- rep(mu0, Ncp_max) # if we want we could store the cluster mean in an auxiliary variable, but let's just leave it out for the moment
-cvar <- var0 # we don't actually use this because in the simplest case, we just assume a fixed variance for each cluster
+cmu <- rep(mu0, Ncluster_max)
+cvar <- var0 # we don't actually use Inverse Wishart Prior because in the simplest case, we just assume a fixed variance for each cluster
 ctau <- solve(cvar)
 
 # We create an "attribution" object which indicates the cluster that each segment belongs to (this is for the second CRP
 # where we group the segments into the cluster
 attr <- matrix(, nrow=nrow(x_mat), ncol=Ncp_max) # 10 is the maximum number of segments in each time series
-attr[, 1] <- 1
-Nattr_cp <- max(attr, na.rm=T)
-alpha_cp <- 2 # the rate at which the time series will decide to open a larger number of changepoints that other time series has not yet considered
-Ncp_of_each_ts <- get_number_of_changepoints(cp)
-
-# Assign the initial cluster of each segment, just assign to the same cluster for now
+# Assign the initial cluster for each segment, just assign to the same cluster for now
 attr[, 1] <- 1
 attr[, 2] <- 1
-# Number of cluster
-Nattr <- 1
-# Cluster spawning coefficient
-alpha <- 1
+
+# For the number of changepoints, Nattr_cp is the maximum number of changepoints (tables).
+# Each time, a time series will be asked if they want to increase this number (open a new table).
+Nattr_cp <- max(attr, na.rm=T)
+alpha_cp <- 2 # the rate at which the time series will decide to open a larger number of changepoints that other time series has not yet considered
+
+
+# We place random changepoints among the time series
+# the actual positions of the changepoints are not important
+# because we will change them anyway. What matters is many time series will originally sit at
+# the same table. This influences the probability to open new table.
+for (ts_index in 1:length(x_cut))
+{
+  ts_length <- length(x_cut[[ts_index]])
+  change_at <- sample(2:ts_length-1, 1)
+  # cp[ts_index] <- list(append(cp[[ts_index]], change_at))
+  cp[ts_index] <- list(change_at)
+}
 
 # == End of Initialization of the Dirichlet Process ==
 # ==
 
 for (ts_index in 1:length(x_cut))
 {
+  cat("\n ==========")
   cat("\n Processing time series ", ts_index)
   # == Step 1: Setting a new number of changepoints for the current TS ==
   # Get the seatings of each number of changepoints
+  Ncp_of_each_ts <- get_number_of_changepoints(cp)
   cp_seatings <- n_customers_at_each_table_cp(Ncp_of_each_ts, Ncp_max)
   # We first unseat the current time series
   table_of_current_ts <- Ncp_of_each_ts[ts_index]
@@ -132,6 +150,9 @@ for (ts_index in 1:length(x_cut))
       part <- find_most_likely_partitioning_of_a_time_series(ts_length, cp_table, cmu, ctau, Nattr, pah)
       p_this_cp_is_correct <- exp(part$lp) # given the maximum number of changepoints and the cluster means
       p_table_cp[cp_table] <- p_this_cp_is_correct * p_sit_with_others_cp
+      cat("\n Likelihood of CRP: ", p_sit_with_others_cp)
+      cat("\n Likelihood of CP: ", part$lp)
+      cat("\n Proposed CP: ", part$cp)
       proposed_cp <- part$cp
     } else {
       # Calculate proba that the time series will open a higher number of changepoints that
@@ -140,16 +161,23 @@ for (ts_index in 1:length(x_cut))
       part <- find_most_likely_partitioning_of_a_time_series(ts_length, cp_table, cmu, ctau, Nattr, pah)
       p_this_cp_is_correct <- exp(part$lp) # given the maximum number of changepoints and the cluster means
       p_table_cp[cp_table] <- p_this_cp_is_correct * p_open_a_new_table_cp
+      cat("\n Likelihood of CRP: ", p_open_a_new_table_cp)
+      cat("\n Likelihood of CP: ", part$lp)
+      cat("\n Proposed CP: ", part$cp)
       proposed_cp <- part$cp
     }
   } # end of looping through all the tables
   p_table_cp <- p_table_cp / sum(p_table_cp)
+  cat("\n Table assignment proba: ", p_table_cp)
   # Sample the new table for this customer to sit (including opening new one)
   table_to_sit_cp <- sample(1:(Nattr_cp+1), 1, replace=T, prob=p_table_cp)
+  cp[ts_index] <- list(proposed_cp)
   if (table_to_sit_cp == (Nattr_cp + 1))
   {
     Nattr_cp <- Nattr_cp + 1
-    cat("\n Maximum changepoints is now ", Nattr_cp)
+    cat("\n Opened a new number of changepoints. Maximum changepoints is now ", Nattr_cp)
+  } else {
+    cat("\n Keep the same number of changepoints. Maximum changepoints is now ", Nattr_cp)
   }
   
   # == End of step 1: Setting a new number of changepoints for the current TS ==

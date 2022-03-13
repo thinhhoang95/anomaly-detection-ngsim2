@@ -79,7 +79,7 @@ get_number_of_changepoints <- function(cp)
   result <- rep(0, length(cp))
   for (i in 1:length(cp))
   {
-    result[i] <- length(cp[i])
+    result[i] <- length(cp[[i]])
   }
   return(result)
 }
