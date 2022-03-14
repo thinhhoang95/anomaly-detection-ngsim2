@@ -21,6 +21,32 @@ reconstruct <- function(x, b, basis)
   return(X %*% b)
 }
 
+cut_x <- function(x_mat, cp, basis, all_pah)
+{
+  segments <- list()
+  as <- list()
+  for (ts_index in 1:dim(x_mat)[1])
+  {
+    segments_of_this_ts <- list()
+    as_of_this_ts <- list()
+    cp_of_this_ts <- cp[[ts_index]]
+    ts_length <- length(x_mat[ts_index,])
+    cp_of_this_ts_extended <- c(1, cp_of_this_ts, ts_length + 1)
+    for (i in 1:(length(cp_of_this_ts)+1))
+    {
+      segment_starts_at <- cp_of_this_ts_extended[i]
+      segment_ends_at <- cp_of_this_ts_extended[i+1] - 1
+      segment <- x_mat[ts_index, segment_starts_at:segment_ends_at]
+      segments_of_this_ts <- append(segments_of_this_ts, list(segment))
+      a <- all_pah[[ts_index]]$a[segment_starts_at, segment_ends_at]
+      as_of_this_ts <- append(as_of_this_ts, list(a))
+    }
+    segments <- append(segments, list(segments_of_this_ts))
+    as <- append(as, list(as_of_this_ts))
+  }
+  return(list("x_cut" = segments, "a_cut" = as))
+}
+
 # To return the segments cut according to cp
 cut_x_with_cp <- function(x_cut, cp, basis)
 {
@@ -88,12 +114,10 @@ n_customers_at_each_table_cp <- function(Ncp, max_cp)
 {
   result <- rep(0, max_cp)
   t_attr <- table(Ncp)
-  for (i in 1:max_cp)
+  t_attr_label <- as.numeric(names(t_attr))
+  for (i in 1:length(attr))
   {
-    if (!is.na(t_attr[i]))
-    {
-      result[i] <- t_attr[i]
-    }
+    result[t_attr_label[i]] <- t_attr[i]
   }
   return(result)
 }
@@ -164,6 +188,7 @@ find_most_likely_partitioning_of_a_time_series <- function(ts_length, Ncp, cmu, 
   # Get all possible changepoint placements
   cp_placements <- append_cp_recursively(list(), rep(0, Ncp), ts_length + 2, 1, Ncp, 0) # the +2 is just a workaround!!! Remember to +2 onto every ts length
   p_cp_placement <- rep(0, length(cp_placements))
+  optimal_cluster_attr <- list()
   for (l in 1:length(cp_placements))
   {
     cp_placement <- cp_placements[[l]]
@@ -182,8 +207,17 @@ find_most_likely_partitioning_of_a_time_series <- function(ts_length, Ncp, cmu, 
       }
       lp_homo <- precalculated_ah$p[segment_starts_at, segment_ends_at]
       p_cp_placement[l] <- p_cp_placement[l] + lp_homo + max(p_a_in_cluster)
+      if (i==1)
+      {
+        best_cluster_for_this_segment <- which.max(p_a_in_cluster)
+      } else 
+      {
+        best_cluster_for_this_segment <- c(best_cluster_for_this_segment, which.max(p_a_in_cluster))
+      }
     }
+    optimal_cluster_attr <- append(optimal_cluster_attr, list(best_cluster_for_this_segment))
   }
   index_of_best_changepoints <- which.max(p_cp_placement)
-  return(list("cp" = cp_placements[[index_of_best_changepoints]], "lp" = p_cp_placement[index_of_best_changepoints]))
+  return(list("cp" = cp_placements[[index_of_best_changepoints]], "lp" = p_cp_placement[index_of_best_changepoints],
+              "attr" = optimal_cluster_attr[[index_of_best_changepoints]]))
 }

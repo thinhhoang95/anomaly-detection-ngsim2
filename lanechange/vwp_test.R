@@ -4,7 +4,9 @@
 # GENERATE A SAMPLE SIGNAL
 #
 # =================
-source("~/Documents/anomaly-detection-ngsim/lanechange/vwp_lib.R")
+# source("~/Documents/anomaly-detection-ngsim/lanechange/vwp_lib.R")
+source("~/anomaly-detection-ngsim/lanechange/vwp_lib.R")
+
 x_sample <- rep(0,30)
 x_mat <- matrix(, nrow=0, ncol = length(x_sample))
 slopes <- c(1,3,1,3,1,3,1,3)

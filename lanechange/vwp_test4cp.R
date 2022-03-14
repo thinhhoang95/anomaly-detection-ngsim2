@@ -6,33 +6,33 @@
 # =================
 # source("~/Documents/anomaly-detection-ngsim/lanechange/vwp_lib.R")
 source("~/anomaly-detection-ngsim/lanechange/vwp_lib.R")
-x_sample <- rep(0,15)
-x_mat <- matrix(, nrow=0, ncol = length(x_sample))
-slopes <- c(1,3,1,3,1,3,1,3)
+default_ts_length <- 20
+x_mat <- matrix(, nrow=0, ncol = default_ts_length)
+slopes <- c(1,-3,-1,3,-1,-3,1,3)
 zero_period <- 12
 rise_period <- 5
 for (s in 1:20) # total number of time series to generate
 {
-  slope_id <- 1 # to use different slopes at different rising periods
+  slope_start_from <- sample(1:4, size=1, replace=T)
+  x_sample <- rep(0, default_ts_length)
   for (t in 1:length(x_sample))
   {
     noise = rnorm(1,mean=0,sd=0.2)
-    if (t %% zero_period > 0)
+    value_at_t <- 0
+    if ((t>1) & (t<=5))
     {
-      if (t %% 12 < rise_period + 1)
-      {
-        # this is a rising period
-        x_sample[t] <- slopes[slope_id] * (t %% zero_period) %% rise_period + noise
-      }
-      else if (t %% 12 == rise_period + 1)
-      {
-        slope_id <- slope_id + 1
-      }
-      else {
-        # this is a zero period
-        x_sample[t] <- noise
-      }
+      value_at_t <- x_sample[t-1] + slopes[slope_start_from]
+    } else if ((t>5) & (t<=10))
+    {
+      value_at_t <- x_sample[t-1] + slopes[slope_start_from + 1]
+    } else if ((t>10) & (t<=15))
+    {
+      value_at_t <- x_sample[t-1] + slopes[slope_start_from + 2]
+    } else if (t>15)
+    {
+      value_at_t <- x_sample[t-1] + slopes[slope_start_from + 3]
     }
+    x_sample[t] <- value_at_t + noise
   }
   x_mat <- rbind(x_mat, x_sample)
 }
@@ -167,10 +167,6 @@ for (big_iter in 1:max_big_iter)
         part <- find_most_likely_partitioning_of_a_time_series(ts_length, cp_table, cmu, ctau, Nattr, pah)
         p_this_cp_is_correct <- exp(part$lp) # given the maximum number of changepoints and the cluster means
         p_table_cp[cp_table] <- p_this_cp_is_correct * p_sit_with_others_cp
-        if (p_table_cp[cp_table] < 0)
-        {
-          print("Negative probability?")
-        }
         # cat("\n Likelihood of CRP: ", p_sit_with_others_cp)
         # cat("\n Likelihood of CP: ", part$lp)
         # cat("\n Proposed CP: ", part$cp)
