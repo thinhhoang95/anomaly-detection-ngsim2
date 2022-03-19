@@ -1,24 +1,30 @@
-least_square <- function(x, basis)
+# TODO: Check the least_square function. It should converge when the TS starts from zero
+# Verify with the reconstruct function.
+# Consider merging the clusters
+
+least_square <- function(x_original, basis)
 {
   # if the basis length is larger than the vector length, just trim off the
   # right part so that it has a length equals to x
-  basis <- basis[1:length(x)]
+  basis <- basis[1:length(x_original)]
   # the design matrix
   # col_of_ones <- rep(1, length(basis))
   X <- basis
   # the response matrix
+  # make sure the ts starts from zero to get the slope
+  x <- x_original - x_original[1]
   Y <- x
   # get the least square solution
   b <- solve(t(X) %*% X) %*% t(X) %*% Y
   return(list("b" = b, "X" = X))
 }
 
-reconstruct <- function(x, b, basis)
+reconstruct <- function(x_length, b, basis)
 {
-  basis <- basis[1:length(x)]
-  col_of_ones <- rep(1, length(basis))
-  X <- cbind(col_of_ones, basis)
-  return(X %*% b)
+  basis <- basis[1:x_length]
+  #col_of_ones <- rep(1, length(basis))
+  #X <- cbind(col_of_ones, basis)
+  return(b %*% basis)
 }
 
 cut_x <- function(x_mat, cp, basis, all_pah)
@@ -48,36 +54,38 @@ cut_x <- function(x_mat, cp, basis, all_pah)
 }
 
 # To return the segments cut according to cp
-cut_x_with_cp <- function(x_cut, cp, basis)
-{
-  x_cut_result <- list()
-  a_cut_result <- list()
-  for (ts_index in 1:length(x_cut))
-  {
-    ts <- x_cut[[ts_index]]
-    ts_length = length(ts)
-    extended_cp <- append(1, cp[[ts_index]])
-    extended_cp <- append(extended_cp, ts_length)
-    for (i in 1:(length(extended_cp)-1))
-    {
-      current_changepoint <- extended_cp[i]
-      next_changepoint <- extended_cp[i+1]
-      ts_to_append <- ts[current_changepoint:(next_changepoint - 1)]
-      segment_a <- as.vector(least_square(ts_to_append, basis)$b)
-      if (i==1)
-      {
-        x_cut_result[ts_index] <- list(ts_to_append) # nothing yet at the row ts_index we are selecting of x_cut_result
-        a_cut_result[ts_index] <- list(segment_a)
-      }
-      else
-      {
-        x_cut_result[ts_index] <- list(append(list(x_cut_result[[ts_index]]), list(ts_to_append)))
-        a_cut_result[ts_index] <- list(append(list(a_cut_result[[ts_index]]), list(segment_a)))
-      }
-    }
-  }
-  return(list("x_cut" = x_cut_result, "a_cut" = a_cut_result))
-}
+# Attention: this function is deprecated at the moment, replaced by the
+# cut_x function above
+# cut_x_with_cp <- function(x_cut, cp, basis)
+# {
+#   x_cut_result <- list()
+#   a_cut_result <- list()
+#   for (ts_index in 1:length(x_cut))
+#   {
+#     ts <- x_cut[[ts_index]]
+#     ts_length = length(ts)
+#     extended_cp <- append(1, cp[[ts_index]])
+#     extended_cp <- append(extended_cp, ts_length)
+#     for (i in 1:(length(extended_cp)-1))
+#     {
+#       current_changepoint <- extended_cp[i]
+#       next_changepoint <- extended_cp[i+1]
+#       ts_to_append <- ts[current_changepoint:(next_changepoint - 1)]
+#       segment_a <- as.vector(least_square(ts_to_append, basis)$b)
+#       if (i==1)
+#       {
+#         x_cut_result[ts_index] <- list(ts_to_append) # nothing yet at the row ts_index we are selecting of x_cut_result
+#         a_cut_result[ts_index] <- list(segment_a)
+#       }
+#       else
+#       {
+#         x_cut_result[ts_index] <- list(append(list(x_cut_result[[ts_index]]), list(ts_to_append)))
+#         a_cut_result[ts_index] <- list(append(list(a_cut_result[[ts_index]]), list(segment_a)))
+#       }
+#     }
+#   }
+#   return(list("x_cut" = x_cut_result, "a_cut" = a_cut_result))
+# }
 
 n_customers_at_each_table <- function(attr)
 {
@@ -91,11 +99,12 @@ n_customers_at_each_table <- function(attr)
   return(result)
 }
 
-log_p_homogeneity <- function(x, basis, a, vary)
+log_p_homogeneity <- function(x_original, basis, a, vary)
 {
   # if the basis length is larger than the vector length, just trim off the
   # right part so that it has a length equals to x
-  basis <- basis[1:length(x)]
+  basis <- basis[1:length(x_original)]
+  x <- x_original - x_original[1]
   tauy <- solve(vary)
   return(-1/2 * tauy * (t(x) %*% x - 2 * t(matrix(x)) %*% matrix(basis) %*% a + t(a) %*% t(basis) %*% basis %*% matrix(a)))
 }
@@ -161,6 +170,7 @@ append_cp_recursively <- function(cp_list, vec, n_length_ts, current_cp_index, m
 
 precalculate_a_and_homogeneity <- function(ts, basis, vary)
 {
+  # so the time series ts would start from zero, not from any arbitrary value
   a_array <- array(, dim=c(length(ts), length(ts)))
   p_array <- array(, dim=c(length(ts), length(ts)))
   for (i in 1:(length(ts)-1))
@@ -168,7 +178,14 @@ precalculate_a_and_homogeneity <- function(ts, basis, vary)
     for (j in i:length(ts))
     {
       # Calculate the slope
-      a <- as.vector(least_square(ts[i:j], basis)$b)
+      if (i==j)
+      {
+        # In this case, the ts contains only {0} so the slope is undetermined
+        # We can choose an arbitrary slope, let's say 0
+        a <- 0
+      } else {
+        a <- as.vector(least_square(ts[i:j], basis)$b)
+      }
       a_array[i,j] <- a 
       # Calculate the homogeneity log likelihood
       p <- log_p_homogeneity(ts[i:j], basis, a, vary)
@@ -220,4 +237,53 @@ find_most_likely_partitioning_of_a_time_series <- function(ts_length, Ncp, cmu, 
   index_of_best_changepoints <- which.max(p_cp_placement)
   return(list("cp" = cp_placements[[index_of_best_changepoints]], "lp" = p_cp_placement[index_of_best_changepoints],
               "attr" = optimal_cluster_attr[[index_of_best_changepoints]]))
+}
+
+merge_segments <- function(cp, attr)
+{
+  # This function will merge adjacent segments with similar cluster attribution
+  # and will return the new number of changepoints
+  for (row in 1:length(cp))
+  {
+    # For each time series (row), we run through the CP associated
+    attr_row <- attr[row,]
+    attr_row_without_na <- attr[row,][!is.na(attr[row,])]
+    n_segments <- length(attr_row_without_na)
+    if (n_segments > 1)
+    {
+      for (col in 1:(n_segments - 1))
+      {
+        if (attr_row_without_na[col] == attr_row_without_na[col+1])
+        {
+          # We find an attr like 3,3 so it is wise to remove the changepoint associated
+          index_of_cp_to_remove <- col # the index of the changepoint to remove would be the same as col
+          cp_at_row <- cp[[row]]
+          new_cp_at_row <- cp_at_row[-index_of_cp_to_remove]
+          cp[row] <- list(new_cp_at_row)
+          # We also update the attr(ibution)
+          # The idea is to delete the entry at col+1 and append a NA at the end
+          attr_row <- c(attr_row[-(col+1)], NA)
+          attr[row,] <- attr_row
+          recufunc <- merge_segments(cp, attr)
+          # The return command will essentially break all loops
+          # The reason why we did this was because cp and attr were changed, so looping further on them
+          # would cause problems with indices
+          return(list("cp" = recufunc$cp, "attr" = recufunc$attr))
+        }
+      }
+    }
+  }
+  return(list("cp" = cp, "attr" = attr))
+}
+
+get_Nattr_cp_from_attr <- function(attr)
+{
+  segments_in_ts <- rep(0, nrow(attr))
+  for (row in 1:nrow(attr))
+  {
+    attr_row <- attr[row,]
+    attr_row <- attr_row[!is.na(attr_row)] # remove all NAs
+    segments_in_ts[row] <- length(attr_row)
+  }
+  return(max(segments_in_ts))
 }
