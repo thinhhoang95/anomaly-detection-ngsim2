@@ -3,6 +3,8 @@ rm(list = ls(all.names = TRUE))
 gc()
 
 source("~/Documents/anomaly-detection-ngsim/lanechange/vwp_visualize.R")
+source("~/Documents/anomaly-detection-ngsim/lanechange/vwp_libc.R")
+# source("~/Documents/anomaly-detection-ngsim/lanechange/vwp_lib.R")
 
 # =======================
 #
@@ -15,17 +17,18 @@ data <- as.matrix(unname(read.csv("~/Documents/anomaly-detection-ngsim/lanechang
 
 # We try to resample all the time series to reduce the search space
 data_rs <- data[,seq(1,ncol(data), 10)]
+rows_to_be_selected <- c()
 
-# Trajectory 101 includes a lane change
-plot(data[101,], type = 'l')
-plot(data_rs[101,], type = 'l', col='blue')
+for (i in 1:nrow(data_rs))
+{
+  if (abs(data_rs[i,1] - data_rs[i, ncol(data_rs)]) > 7)
+  {
+    rows_to_be_selected <- append(rows_to_be_selected, i)
+  }
+}
 
-# Select a subset of trajectories for segmentation learning
-# selected_rows <- seq(1,nrow(data),3)
-selected_rows <- 1:11
-cat("Selected rows: ", selected_rows, "\n")
-data_srs <- data_rs[selected_rows,]
-data_srs <- rbind(data_srs, data_srs[10,], data_srs[10,], data_srs[10,])
+data_srs <- data_rs[rows_to_be_selected,]
+# data_srs <- rbind(data_srs, data_srs[10,], data_srs[10,], data_srs[10,])
 cat("Dataset dimensions: ", dim(data_srs))
 
 # Plot all the trajectories to visualize first
@@ -40,21 +43,14 @@ for (i in 1:nrow(data_srs))
   }
 }
 
-x_mat <- data_srs # rename the dataset so that it is compatible with the code we wrote earlier
+x_mat <- data_srs
 
 # ================
 #
-# DEFINE A BASIS FUNCTION
+# BASIS
 #
 # =================
-basis = 0:100
-
-# ================
-#
-# LOAD THE VIETNAMESE WEDDING PROCESS LIBRARY
-#
-# =================
-source("~/Documents/anomaly-detection-ngsim/lanechange/vwp_lib.R")
+basis <- 0:100
 
 # ================
 #
@@ -94,12 +90,13 @@ Ncp_max <- 10
 Ncluster_max <- 10
 
 # Number of current clusters (i.e., tables that all segments might sit)
-Nattr <- 1
+Nattr <- 3
 # Cluster spawning coefficient
-alpha <- 1e-1
+alpha <- 1e-3
 
 # Cluster params
 cmu <- rep(mu0, Ncluster_max)
+cmu[1:3] <- c(-2, 0, 2)
 cvar <- var0 # we don't actually use Inverse Wishart Prior because in the simplest case, we just assume a fixed variance for each cluster
 ctau <- solve(cvar)
 
@@ -113,7 +110,7 @@ attr[, 2] <- 1
 # For the number of changepoints, Nattr_cp is the maximum number of changepoints (tables).
 # Each time, a time series will be asked if they want to increase this number (open a new table).
 Nattr_cp <- max(attr, na.rm=T)
-alpha_cp <- 1e-16 # the rate at which the time series will decide to open a larger number of changepoints that other time series has not yet considered
+alpha_cp <- 1e-1000 # the rate at which the time series will decide to open a larger number of changepoints that other time series has not yet considered
 
 
 # We place random changepoints among the time series
@@ -195,7 +192,7 @@ for (big_iter in 1:max_big_iter)
         proposed_cp <- append(proposed_cp, list(part$cp))
         proposed_cluster_attr <- append(proposed_cluster_attr, list(part$attr))
       } else {
-        if (Nattr_cp <= 2)
+        if (Nattr_cp <= 3)
         {
           # Calculate proba that the time series will open a higher number of changepoints that
           # other time series yet to consider

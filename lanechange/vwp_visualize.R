@@ -2,28 +2,34 @@ visualize_belief <- function(x_mat, cp, cmu, attr, index)
 {
   ts_length <- ncol(x_mat)
   cp_of_current_ts <- cp[[index]]
-  cp_of_current_ts_extended <- c(1, cp_of_current_ts, ts_length + 1)
+  cp_of_current_ts_extended <- c(1, cp_of_current_ts, ts_length)
   x_recons <- rep(0, ts_length)
   for (i in 1:(length(cp_of_current_ts)+1))
   {
     segment_starts_at <- cp_of_current_ts_extended[i]
-    segment_ends_at <- cp_of_current_ts_extended[i+1] - 1
+    segment_ends_at <- cp_of_current_ts_extended[i+1]
     # cat("\n Segment starts at", segment_starts_at)
     # cat("\n Segment ends at", segment_ends_at)
     # Reconstruct the segment
     a <- cmu[attr[index, i]]
     for (t in segment_starts_at:segment_ends_at)
     {
-      if (t==segment_starts_at)
+      if (t==1)
       {
         x_recons[t] <- x_mat[index, t]
       } else {
-        x_recons[t] <- x_recons[t-1] + a
+        if (t==segment_starts_at + 1)
+        {
+          x_recons[t] <- x_mat[index, t]
+        } else {
+          x_recons[t] <- x_recons[t-1] + a
+        }
       }
+      
     }
   }
   
-  plot(x_recons, col='red', pch=19)
+  plot(x_recons, col='red', pch=19, ylim=range(cbind(x_mat[index,], x_recons))+c(-2,2))
   points(x_mat[index,], col='green')
 }
 
@@ -39,7 +45,8 @@ explain_belief <- function(x_mat, cp, cmu, attr, index)
     segment_starts_at <- cp_of_current_ts_extended[i]
     segment_ends_at <- cp_of_current_ts_extended[i+1] - 1
     a <- cmu[attr[index, i]]
-    text(segment_starts_at, x_mat[index, segment_starts_at] + 5, round(a))
+    text(segment_starts_at, x_mat[index, segment_starts_at] + 0.25, round(a, digits=2))
+    # text(segment_starts_at, x_mat[index, segment_starts_at] - 0.5, round(a, digits=2))
   }
 }
 

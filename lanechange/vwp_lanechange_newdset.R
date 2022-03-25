@@ -3,6 +3,8 @@ rm(list = ls(all.names = TRUE))
 gc()
 
 source("~/Documents/anomaly-detection-ngsim/lanechange/vwp_visualize.R")
+source("~/Documents/anomaly-detection-ngsim/lanechange/vwp_libc.R")
+# source("~/Documents/anomaly-detection-ngsim/lanechange/vwp_lib.R")
 
 # =======================
 #
@@ -15,46 +17,48 @@ data <- as.matrix(unname(read.csv("~/Documents/anomaly-detection-ngsim/lanechang
 
 # We try to resample all the time series to reduce the search space
 data_rs <- data[,seq(1,ncol(data), 10)]
+rows_to_be_selected <- c()
 
-# Trajectory 101 includes a lane change
-plot(data[101,], type = 'l')
-plot(data_rs[101,], type = 'l', col='blue')
+for (i in 1:nrow(data_rs))
+{
+  if (abs(data_rs[i,1] - data_rs[i, ncol(data_rs)]) > 7)
+  {
+    rows_to_be_selected <- append(rows_to_be_selected, i)
+  }
+}
 
-# Select a subset of trajectories for segmentation learning
-# selected_rows <- seq(1,nrow(data),3)
-selected_rows <- 1:11
-cat("Selected rows: ", selected_rows, "\n")
-data_srs <- data_rs[selected_rows,]
-data_srs <- rbind(data_srs, data_srs[10,], data_srs[10,], data_srs[10,])
+data_srs <- data_rs[rows_to_be_selected,]
+# data_srs <- rbind(data_srs, data_srs[10,], data_srs[10,], data_srs[10,])
 cat("Dataset dimensions: ", dim(data_srs))
 
-# Plot all the trajectories to visualize first
+# Cut each time series
+data_srs_two <- c()
 for (i in 1:nrow(data_srs))
+{
+  data_srs_two <- rbind(data_srs_two, data_srs[i, 1:20])
+  data_srs_two <- rbind(data_srs_two, data_srs[i, 21:40])
+}
+
+# Plot all the trajectories to visualize first
+for (i in 1:nrow(data_srs_two))
 {
   # cat("Plotting graph ", i, "\n")
   if (i==1)
   {
-    plot(data_srs[1,], ylim=range(data_srs), type='l')
+    plot(data_srs_two[1,], ylim=range(data_srs_two), type='l')
   } else {
-    lines(data_srs[i,])
+    lines(data_srs_two[i,])
   }
 }
 
-x_mat <- data_srs # rename the dataset so that it is compatible with the code we wrote earlier
+x_mat <- data_srs_two
 
 # ================
 #
-# DEFINE A BASIS FUNCTION
+# BASIS
 #
 # =================
-basis = 0:100
-
-# ================
-#
-# LOAD THE VIETNAMESE WEDDING PROCESS LIBRARY
-#
-# =================
-source("~/Documents/anomaly-detection-ngsim/lanechange/vwp_lib.R")
+basis <- 0:100
 
 # ================
 #
@@ -96,10 +100,12 @@ Ncluster_max <- 10
 # Number of current clusters (i.e., tables that all segments might sit)
 Nattr <- 1
 # Cluster spawning coefficient
-alpha <- 1e-1
+alpha <- 1e-10
 
 # Cluster params
 cmu <- rep(mu0, Ncluster_max)
+# cmu[1:3] <- c(-4, 0, 4)
+cmu[1] <- c(-4)
 cvar <- var0 # we don't actually use Inverse Wishart Prior because in the simplest case, we just assume a fixed variance for each cluster
 ctau <- solve(cvar)
 
@@ -113,7 +119,7 @@ attr[, 2] <- 1
 # For the number of changepoints, Nattr_cp is the maximum number of changepoints (tables).
 # Each time, a time series will be asked if they want to increase this number (open a new table).
 Nattr_cp <- max(attr, na.rm=T)
-alpha_cp <- 1e-16 # the rate at which the time series will decide to open a larger number of changepoints that other time series has not yet considered
+alpha_cp <- 1e-1000 # the rate at which the time series will decide to open a larger number of changepoints that other time series has not yet considered
 
 
 # We place random changepoints among the time series
@@ -134,11 +140,11 @@ for (ts_index in 1:length(x_cut))
 # == Begin the iterative procedure ==
 # == >> << == 
 
-max_big_iter <- 5
+max_big_iter <- 50
 for (big_iter in 1:max_big_iter)
 {
   all_pah <- list()
-  cat('Iteration ', big_iter, '\n')
+  cat('\n Iteration ', big_iter, '\n')
   print('Optimizing changepoints...')
   pb = txtProgressBar(min = 0, max = dim(x_mat)[1], initial = 0)
   for (ts_index in 1:(dim(x_mat)[1]))
@@ -172,7 +178,7 @@ for (big_iter in 1:max_big_iter)
         nk_cp <- cp_seatings[cp_table]
         N_seatings_cp <- sum(cp_seatings)
         p_sit_with_others_cp <- nk_cp / (N_seatings_cp - 1 + alpha_cp)
-        if (p_sit_with_others_cp <= 0) # this corresponds to no changepoint was detected
+        if (p_sit_with_others_cp <= 0 | is.nan(p_sit_with_others_cp) ) # this corresponds to no changepoint was detected
         {
           p_sit_with_others_cp = 0 # taking the log of this will yield -Inf
         } 
@@ -195,7 +201,7 @@ for (big_iter in 1:max_big_iter)
         proposed_cp <- append(proposed_cp, list(part$cp))
         proposed_cluster_attr <- append(proposed_cluster_attr, list(part$attr))
       } else {
-        if (Nattr_cp <= 2)
+        if (Nattr_cp <= 3)
         {
           # Calculate proba that the time series will open a higher number of changepoints that
           # other time series yet to consider
@@ -235,7 +241,7 @@ for (big_iter in 1:max_big_iter)
       print("NA detected")
     }
     p_table_cp <- p_table_cp - max(p_table_cp)
-    cat("\n LOG assignment proba: ", p_table_cp)
+    # cat("\n LOG assignment proba: ", p_table_cp)
     # print(p_table_cp)
     p_table_cp <- exp(p_table_cp)
     # Then we normalize this vector, which is always possible since there guarantees
@@ -276,7 +282,7 @@ for (big_iter in 1:max_big_iter)
   x_cut <- xa_cut$x_cut
   a_cut <- xa_cut$a_cut
   
-  max_iter <- 450 # max iter per clustering attempt
+  max_iter <- 50 # max iter per clustering attempt
   pb2 = txtProgressBar(min = 0, max = max_iter, initial = 0)
   print('Clustering segments...')
   for (iter in 1:max_iter)
@@ -372,12 +378,18 @@ for (big_iter in 1:max_big_iter)
   # We will try to merge changepoints that are not changepoints at all!
   # Because it assigns the segment after the changepoint to the same cluster
   # as the current segment
-  #print('Merging segments...')
-  #merge_result <- merge_segments(cp, attr)
-  #cp <- merge_result$cp
-  #attr <- merge_result$attr
+  print('Merging segments...')
+  merge_result <- merge_segments(cp, attr)
+  cp <- merge_result$cp
+  attr <- merge_result$attr
   # Recalculate the maximum changepoints opened
-  #Nattr_cp <- get_Nattr_cp_from_attr(attr)
-  #cat('Maximum changepoints is now ', Nattr_cp, '\n')
+  Nattr_cp <- get_Nattr_cp_from_attr(attr)
+  cat('===> Iteration summary <===\n')
+  cat('Maximum changepoints is now ', Nattr_cp, '\n')
   cat('Cluster means: ', cmu[1:Nattr], '\n')
+  Ncp_of_each_ts <- get_number_of_changepoints(cp)
+  cp_seatings <- n_customers_at_each_table_cp(Ncp_of_each_ts, Ncp_max)
+  names(cp_seatings) <- 1:length(cp_seatings)
+  cat('Changepoints stastistics: ', '\n')
+  print(cp_seatings)
 } # end of big iter

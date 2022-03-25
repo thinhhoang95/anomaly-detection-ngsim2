@@ -54,7 +54,7 @@ basis = 0:100
 # LOAD THE VIETNAMESE WEDDING PROCESS LIBRARY
 #
 # =================
-source("~/Documents/anomaly-detection-ngsim/lanechange/vwp_lib.R")
+source("~/Documents/anomaly-detection-ngsim/lanechange/vwp_libc.R")
 
 # ================
 #

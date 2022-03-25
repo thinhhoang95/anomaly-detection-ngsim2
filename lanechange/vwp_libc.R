@@ -1,5 +1,4 @@
-# TODO: Check the least_square function. It should converge when the TS starts from zero
-# Verify with the reconstruct function.
+# This version will try to ensure the continuity of the reconstructed curve
 # Consider merging the clusters
 
 least_square <- function(x_original, basis)
@@ -37,11 +36,11 @@ cut_x <- function(x_mat, cp, basis, all_pah)
     as_of_this_ts <- list()
     cp_of_this_ts <- cp[[ts_index]]
     ts_length <- length(x_mat[ts_index,])
-    cp_of_this_ts_extended <- c(1, cp_of_this_ts, ts_length + 1)
+    cp_of_this_ts_extended <- c(1, cp_of_this_ts, ts_length)
     for (i in 1:(length(cp_of_this_ts)+1))
     {
       segment_starts_at <- cp_of_this_ts_extended[i]
-      segment_ends_at <- cp_of_this_ts_extended[i+1] - 1
+      segment_ends_at <- cp_of_this_ts_extended[i+1]
       segment <- x_mat[ts_index, segment_starts_at:segment_ends_at]
       segments_of_this_ts <- append(segments_of_this_ts, list(segment))
       a <- all_pah[[ts_index]]$a[segment_starts_at, segment_ends_at]
@@ -211,17 +210,18 @@ find_most_likely_partitioning_of_a_time_series <- function(ts_length, Ncp, cmu, 
   
   # Get all possible changepoint placements
   cp_placements <- append_cp_recursively(list(), rep(0, Ncp), ts_length + 2, 1, Ncp, 0) # the +2 is just a workaround!!! Remember to +2 onto every ts length
+  # cat("Placements obtained! \n")
   p_cp_placement <- rep(0, length(cp_placements))
   optimal_cluster_attr <- list()
   segment_slopes_for_each_cp_placement <- list()
   for (l in 1:length(cp_placements)) # loop through the CP placements
   {
     cp_placement <- cp_placements[[l]]
-    cp_placement_extended <- c(1, cp_placement, ts_length + 1)
+    cp_placement_extended <- c(1, cp_placement, ts_length)
     for (i in 1:(length(cp_placement)+1)) # loop through the segments
     {
       segment_starts_at <- cp_placement_extended[i]
-      segment_ends_at <- cp_placement_extended[i+1] - 1
+      segment_ends_at <- cp_placement_extended[i+1]
       # We get a and homogeneity loglikelihood for the corresponding segment
       a <- precalculated_ah$a[segment_starts_at, segment_ends_at]
       # Get the most likely cluster that a belongs to 
@@ -250,6 +250,74 @@ find_most_likely_partitioning_of_a_time_series <- function(ts_length, Ncp, cmu, 
               "attr" = optimal_cluster_attr[[index_of_best_changepoints]], "a" = segment_slopes_for_each_cp_placement[[index_of_best_changepoints]]))
 }
 
+dynamic_program_cp <- function(sol, Ncp, ts, k, basis, vary)
+{
+  # Use dynamic programming to fill in the solution of finding changepoints, shown in the sol matrix
+  # default_sol <- list("cp" = array(,dim=c(10,20,10)), "p" = array(,dim=c(20,10)))
+  # 20: length of ts, 10: maximum number of changepoints
+  if (k>Ncp)
+  {
+    return(sol)
+  }
+  
+  ts_length <- length(ts)
+  ts_pah <- precalculate_a_and_homogeneity(ts, basis, vary)
+  for (v in 1:ts_length)
+  {
+    sub_ts <- ts[v:ts_length]
+    if (v+1 > ts_length - k - 1)
+    {
+      # The sub_ts will be too short to contain a meaningful changepoint, will do nothing
+    } else {
+      range_of_cp <- (v+1):(ts_length-k-1)
+      logp_of_subts_with_each_cp_placement <- rep(0, length(range_of_cp))
+      a_of_the_first_segment <- rep(0, length(range_of_cp))
+      a_of_the_second_segment <- list()
+      for (proposed_cp in range_of_cp)
+      {
+        first_segment_starts_at <- v
+        first_segment_ends_at <- proposed_cp 
+        second_segment_starts_at <- proposed_cp 
+        second_segment_ends_at <- ts_length
+        
+        if (k==1)
+        {
+          # This is the only changepoint left in the time series
+          logp_second_segment <- ts_pah$p[second_segment_starts_at, second_segment_ends_at]
+          a_of_the_second_segment <- append(a_of_the_second_segment, list(ts_pah$a[second_segment_starts_at, second_segment_ends_at]))
+        } else { # k>1
+          logp_second_segment <- sol$p[second_segment_starts_at,k-1]
+          a_of_the_second_segment <- append(a_of_the_second_segment, list(sol$a[1:k, second_segment_starts_at, k-1])) # copies the a as well
+        }
+        
+        logp_of_subts_with_each_cp_placement[proposed_cp - v] <- ts_pah$p[first_segment_starts_at, first_segment_ends_at] + logp_second_segment
+        a_of_the_first_segment[proposed_cp - v] <- ts_pah$a[first_segment_starts_at, first_segment_ends_at]
+      }
+      index_of_cp_that_yields_max_logp <- which.max(logp_of_subts_with_each_cp_placement)
+      cp_that_yields_max_logp <- range_of_cp[index_of_cp_that_yields_max_logp]
+      max_logp <- logp_of_subts_with_each_cp_placement[index_of_cp_that_yields_max_logp]
+      best_a_of_the_first_segment <- a_of_the_first_segment[index_of_cp_that_yields_max_logp]
+      best_a_of_the_second_segment <- unlist(a_of_the_second_segment[[index_of_cp_that_yields_max_logp]])
+      sol$p[v,k] <- max_logp
+      sol$a[1,v,k] <- best_a_of_the_first_segment
+      sol$a[2:(k+1),v,k] <- best_a_of_the_second_segment
+      sol$cp[1,v,k] <- cp_that_yields_max_logp # the first changepoint
+      if (k>1)
+      {
+        sol$cp[2:k,v,k] <- sol$cp[1:k-1, cp_that_yields_max_logp, k-1] # other changepoints are copied
+        # from the solution to the time series assumed to start from the just found changepoint
+      }
+    } # check if the sub_ts is too short
+    
+  } # loop through v (the substring beginning index)
+  if (k < Ncp)
+  {
+    # Recursive / dynamic programming
+    sol <- dynamic_program_cp(sol, Ncp, ts, k+1, basis, vary)
+  }
+  return(sol)
+}
+
 merge_segments <- function(cp, attr)
 {
   # This function will merge adjacent segments with similar cluster attribution
@@ -270,7 +338,13 @@ merge_segments <- function(cp, attr)
           index_of_cp_to_remove <- col # the index of the changepoint to remove would be the same as col
           cp_at_row <- cp[[row]]
           new_cp_at_row <- cp_at_row[-index_of_cp_to_remove]
-          cp[row] <- list(new_cp_at_row)
+          if (length(new_cp_at_row) <= 1)
+          {
+            # Do nothing, since we don't want the time series to have zero changepoints
+          } else {
+            # Only merge segments if we have more than 1 changepoint left
+            cp[row] <- list(new_cp_at_row)
+          }
           # We also update the attr(ibution)
           # The idea is to delete the entry at col+1 and append a NA at the end
           attr_row <- c(attr_row[-(col+1)], NA)
