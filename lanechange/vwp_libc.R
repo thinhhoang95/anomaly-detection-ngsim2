@@ -26,7 +26,9 @@ reconstruct <- function(x_length, b, basis)
   return(b %*% basis)
 }
 
-cut_x <- function(x_mat, cp, basis, all_pah)
+# This is the legacy version that uses the homogeneity likelihood instead of the joint likelihood
+# see the cut_x function below
+cut_x_legacy_pah <- function(x_mat, cp, basis, all_pah)
 {
   segments <- list()
   as <- list()
@@ -44,6 +46,32 @@ cut_x <- function(x_mat, cp, basis, all_pah)
       segment <- x_mat[ts_index, segment_starts_at:segment_ends_at]
       segments_of_this_ts <- append(segments_of_this_ts, list(segment))
       a <- all_pah[[ts_index]]$a[segment_starts_at, segment_ends_at]
+      as_of_this_ts <- append(as_of_this_ts, list(a))
+    }
+    segments <- append(segments, list(segments_of_this_ts))
+    as <- append(as, list(as_of_this_ts))
+  }
+  return(list("x_cut" = segments, "a_cut" = as))
+}
+
+cut_x <- function(x_mat, cp, basis, pa_homo)
+{
+  segments <- list()
+  as <- list()
+  for (ts_index in 1:dim(x_mat)[1])
+  {
+    segments_of_this_ts <- list()
+    as_of_this_ts <- list()
+    cp_of_this_ts <- cp[[ts_index]]
+    ts_length <- length(x_mat[ts_index,])
+    cp_of_this_ts_extended <- c(1, cp_of_this_ts, ts_length)
+    for (i in 1:(length(cp_of_this_ts)+1))
+    {
+      segment_starts_at <- cp_of_this_ts_extended[i]
+      segment_ends_at <- cp_of_this_ts_extended[i+1]
+      segment <- x_mat[ts_index, segment_starts_at:segment_ends_at]
+      segments_of_this_ts <- append(segments_of_this_ts, list(segment))
+      a <- pa_homo$a[ts_index, segment_starts_at, segment_ends_at]
       as_of_this_ts <- append(as_of_this_ts, list(a))
     }
     segments <- append(segments, list(segments_of_this_ts))
@@ -168,6 +196,102 @@ append_cp_recursively <- function(cp_list, vec, n_length_ts, current_cp_index, m
   return(cp_list)
 }
 
+precalculate_pa_homo <- function(x_mat, basis, vary)
+{
+  result_p <- array(NA, dim=c(nrow(x_mat), ncol(x_mat), ncol(x_mat)))
+  result_a <- array(NA, dim=c(nrow(x_mat), ncol(x_mat), ncol(x_mat)))
+  for (ts_index in 1:nrow(x_mat))
+  {
+    ts <- x_mat[ts_index,]
+    # so the time series ts would start from zero, not from any arbitrary value
+    a_array <- array(, dim=c(length(ts), length(ts)))
+    p_array <- array(, dim=c(length(ts), length(ts)))
+    for (i in 1:(length(ts)-1))
+    {
+      for (j in i:length(ts))
+      {
+        # Calculate the slope
+        if (j==i)
+        {
+          # In this case, the ts contains only {0} so the slope is undetermined
+          # We can choose an arbitrary slope, let's say 0
+          a <- 0
+          p <- -Inf # we do not want the algorithm to cheat by using an infinite amount of changepoints to get zero probability
+        } else if (j==i+1)
+        {
+          # In this case, the slope can be estimated but nevertheless, the log proba is still zero (i.e. proba=1)
+          a <- as.vector(least_square(ts[i:j], basis)$b)
+          p <- -Inf # we try to avoid this also
+        } else {
+          a <- as.vector(least_square(ts[i:j], basis)$b)
+          # Calculate the homogeneity log likelihood
+          p <- log_p_homogeneity(ts[i:j], basis, a, vary)
+        }
+        a_array[i,j] <- a 
+        p_array[i,j] <- p
+      }
+    }
+    result_p[ts_index,,] <- p_array 
+    result_a[ts_index,,] <- a_array
+  } # rows of x_mat
+  return(list("a" = result_a, "p" = result_p))
+}
+
+# This will find the likelihood of every substring of the timeseries, marginalized by the clusters
+# this is different from the precalculated_a_and_homogeneity, which only deals with the homogeneity of the time series
+# not how typicality will the ts fit into the cluster
+precalculate_a_and_likelihood <- function(ts_index, ts_length, pa_homo, basis, vary, Nattr, cmu, ctau, segment_seatings, alpha)
+{
+  # so the time series ts would start from zero, not from any arbitrary value
+  a_array <- array(, dim=c(ts_length, ts_length))
+  p_array <- array(, dim=c(ts_length, ts_length))
+  for (i in 1:(ts_length-1))
+  {
+    for (j in i:ts_length)
+    {
+      # Calculate the slope
+      if (j==i)
+      {
+        # In this case, the ts contains only {0} so the slope is undetermined
+        # We can choose an arbitrary slope, let's say 0
+        a <- 0
+        p <- -Inf # we do not want the algorithm to cheat by using an infinite amount of changepoints to get zero probability
+      } else if (j==i+1)
+      {
+        # In this case, the slope can be estimated but nevertheless, the log proba is still zero (i.e. proba=1)
+        # a <- as.vector(least_square(ts[i:j], basis)$b)
+        a <- pa_homo$a[ts_index, i, j]
+        p <- -Inf # we try to avoid this also
+      } else {
+        a <- pa_homo$a[ts_index, i, j]
+        # a <- as.vector(least_square(ts[i:j], basis)$b)
+        # Calculate the expected typicality probability
+        p_a_in_cluster <- rep(0, Nattr)
+        p_typicality_in_cluster <- rep(0, Nattr)
+        for (cluster_id in 1:Nattr)
+        {
+          # p_a_in_cluster[cluster_id] <- -1/2 * ctau * (a - cmu[cluster_id])^2
+          p_a_in_cluster[cluster_id] <- dnorm(a, mean = cmu[cluster_id], sd=sqrt(solve(ctau)))
+          nk <- segment_seatings[cluster_id]
+          total_seatings <- sum(segment_seatings)
+          p_popularity_of_the_current_cluster <- nk/(total_seatings - 1 + alpha) # the mixture proportion
+          p_typicality_in_cluster[cluster_id] <- p_popularity_of_the_current_cluster * p_a_in_cluster[cluster_id]
+        }
+        p_expected_typicality_among_all_clusters <- sum(p_typicality_in_cluster)
+        
+        # Calculate the homogeneity log likelihood
+        p_homogeneity <- pa_homo$p[ts_index, i, j]
+        # p_homogeneity <- log_p_homogeneity(ts[i:j], basis, a, vary)
+        # The proba of the time series ij, expected over the current clusters:
+        p <- log(p_expected_typicality_among_all_clusters) + p_homogeneity
+      }
+      a_array[i,j] <- a 
+      p_array[i,j] <- p
+    }
+  }
+  return(list("a" = a_array, "p" = p_array))
+}
+
 precalculate_a_and_homogeneity <- function(ts, basis, vary)
 {
   # so the time series ts would start from zero, not from any arbitrary value
@@ -201,6 +325,8 @@ precalculate_a_and_homogeneity <- function(ts, basis, vary)
   return(list("a" = a_array, "p" = p_array))
 }
 
+### THIS IS THE LEGACY METHOD TO FIND THE CHANGEPOINTS THAT CAN BE EXTREMELY SLOW WITH LARGE NUMBER OF CHANGEPOINTS
+### USE THE NEW METHOD: DYNAMIC PROGRAMMING INSTEAD
 find_most_likely_partitioning_of_a_time_series <- function(ts_length, Ncp, cmu, ctau, Nattr, precalculated_ah)
 {
   # ts is the vector of time series
@@ -250,7 +376,7 @@ find_most_likely_partitioning_of_a_time_series <- function(ts_length, Ncp, cmu, 
               "attr" = optimal_cluster_attr[[index_of_best_changepoints]], "a" = segment_slopes_for_each_cp_placement[[index_of_best_changepoints]]))
 }
 
-dynamic_program_cp <- function(sol, Ncp, ts, k, basis, vary)
+dynamic_program_cp <- function(sol, Ncp, ts, ts_index, pa_homo, k, basis, vary, Nattr, cmu, ctau, segment_seatings, alpha)
 {
   # Use dynamic programming to fill in the solution of finding changepoints, shown in the sol matrix
   # default_sol <- list("cp" = array(,dim=c(10,20,10)), "p" = array(,dim=c(20,10)))
@@ -261,7 +387,8 @@ dynamic_program_cp <- function(sol, Ncp, ts, k, basis, vary)
   }
   
   ts_length <- length(ts)
-  ts_pah <- precalculate_a_and_homogeneity(ts, basis, vary)
+  # ts_pah <- precalculate_a_and_homogeneity(ts, basis, vary) # only has p_homogeneity,
+  ts_pah <- precalculate_a_and_likelihood(ts_index, ts_length, pa_homo, basis, vary, Nattr, cmu, ctau, segment_seatings, alpha)
   for (v in 1:ts_length)
   {
     sub_ts <- ts[v:ts_length]
@@ -313,7 +440,7 @@ dynamic_program_cp <- function(sol, Ncp, ts, k, basis, vary)
   if (k < Ncp)
   {
     # Recursive / dynamic programming
-    sol <- dynamic_program_cp(sol, Ncp, ts, k+1, basis, vary)
+    sol <- dynamic_program_cp(sol, Ncp, ts, ts_index, pa_homo, k+1, basis, vary, Nattr, cmu, ctau, segment_seatings, alpha)
   }
   return(sol)
 }
