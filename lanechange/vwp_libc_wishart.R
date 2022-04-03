@@ -328,12 +328,16 @@ precalculate_a_and_likelihood <- function(ts_index, ts_length, pa_homo, basis, v
           sigman <- (clusters[[cluster_id]]$lambda * (clusters[[cluster_id]]$kappa + 1))/(clusters[[cluster_id]]$kappa * (clusters[[cluster_id]]$nu - 1 + 1))
           dfn <- clusters[[cluster_id]]$nu - 1 + 1
           # Typicality of a in the cluster is given by a multivariate t distribution
-          p_a_in_cluster <- dmvt(a, mun, sigman, dfn, log=F)
+          p_a_in_cluster[cluster_id] <- dmvt(a, mun, as.matrix(sigman), dfn, log=F)
           # p_a_in_cluster[cluster_id] <- dnorm(a, mean = cmu[cluster_id], sd=sqrt(solve(ctau)))
           nk <- segment_seatings[cluster_id]
           total_seatings <- sum(segment_seatings)
           p_popularity_of_the_current_cluster <- nk/(total_seatings - 1 + alpha) # the mixture proportion
           p_typicality_in_cluster[cluster_id] <- p_popularity_of_the_current_cluster * p_a_in_cluster[cluster_id]
+          if (is.na(p_a_in_cluster[cluster_id]))
+          {
+            print("Error")
+          }
         }
         p_expected_typicality_among_all_clusters <- sum(p_typicality_in_cluster)
         
@@ -527,11 +531,12 @@ get_clusters_to_use_in_dynamic_programming <- function(Nattr, attr, a_cut, hypa,
   # This function calculates all the t distribution's parameters of all the clusters for use in dynamic programming as "clusters"
   a_ex <- unlist(a_cut[-index_of_ts_to_exclude])
   attr_ex <- attr[-index_of_ts_to_exclude,1:Nattr]
+  attr_ex <- attr_ex[!is.na(attr_ex)] # remove NAs
   # We now get all the a corresponding to the current cluster k
   clusters <- list()
   for (k in 1:Nattr)
   {
-    a_of_k <- a_ex[as.vector(attr_ex == 1)]
+    a_of_k <- a_ex[as.vector(attr_ex == k)] # get all a associated with cluster k
     t_param <- get_cluster_posterior_student_params_of_cluster_k(ak = a_of_k, mu0 = hypa$mu, nu0 = hypa$nu, kappa0 = hypa$kappa, lambda0 = hypa$lambda)
     clusters <- append(clusters, list(t_param))
   }

@@ -7,7 +7,7 @@ rm(list = ls(all.names = TRUE))
 gc()
 
 source("~/Documents/anomaly-detection-ngsim/lanechange/vwp_visualize.R")
-source("~/Documents/anomaly-detection-ngsim/lanechange/vwp_libc_wishart.R")
+debugSource("~/Documents/anomaly-detection-ngsim/lanechange/vwp_libc_wishart.R")
 library(mvtnorm) # multivariate Student t distribution: for dmvt
 # source("~/Documents/anomaly-detection-ngsim/lanechange/vwp_lib.R")
 
@@ -152,7 +152,7 @@ a_cut <- xa_cut$a_cut
 # Normal Inverse Wishart Hyperparameters
 hypa <- list("mu" = mu0, "nu" = 1, "kappa" = 5, "lambda" = 0.5)
 
-max_big_iter <- 5
+max_big_iter <- 50
 for (big_iter in 1:max_big_iter)
 {
   all_pah <- list()
