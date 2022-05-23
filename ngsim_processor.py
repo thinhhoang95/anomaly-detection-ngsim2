@@ -127,15 +127,16 @@ class NGSIM_Processor:
             if not self.is_veh_in_patch(lx, ly):
                 break
             else:
-                traj_x.append(lx)
-                traj_y.append(ly)
-                traj_t.append(gtime)
-                traj_v.append(v)
+                # traj_x.append(lx)
+                # traj_y.append(ly)
+                # traj_t.append(gtime)
+                # traj_v.append(v)
                 gtime -= 100
 
         relative_gtime = gtime
+        # print('Beging tracing from {} till {}'.format(relative_gtime, relative_gtime + duration))
 
-        gtime = gtime_at_random_row
+        # gtime = gtime_at_random_row
         # Trace forward in time for a duration specified by the parameter "duration"
 
         while gtime <= relative_gtime + duration:
@@ -144,7 +145,7 @@ class NGSIM_Processor:
             df_query = self.df[
                 (self.df['Vehicle_ID'] == vehicle_id_of_the_random_row) & (self.df['Global_Time'] == gtime)]
             if df_query.shape[0] == 0:
-                print('The vehicle {} disappeared before completing the trj of duration {}'.format(vehicle_id_of_the_random_row, duration))
+                print('The vehicle {} disappeared before completing the trj of duration {}. The trajectory could be corrupted.'.format(vehicle_id_of_the_random_row, duration))
                 break
             row_of_interest = df_query.iloc[0]
             lx = row_of_interest.Local_X
