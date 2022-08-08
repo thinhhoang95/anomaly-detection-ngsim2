@@ -14,7 +14,7 @@ else:
 
 import traci
 sumoBinary = "sumo-gui" # for Macbook Pro machine
-sumoCmd = [sumoBinary, "-c", "controlled_intersection/default.sumocfg"] # for Macbook Pro machine
+sumoCmd = [sumoBinary, "-c", "highway/highway.sumocfg"] # for Macbook Pro machine
 traci.start(sumoCmd)
 
 # Delete the file if exists
@@ -26,7 +26,7 @@ except OSError:
     pass
 with open('trajectory.csv', 'a') as csvFile:
     step = 0
-    while step < 2000:
+    while step < 300:
         traci.simulationStep()
         listAllVehiclesId = traci.vehicle.getIDList()
         for vehId in listAllVehiclesId:

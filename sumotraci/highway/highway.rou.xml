@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on 08/08/22 11:36:06 by Eclipse SUMO netedit Version 1.7.0
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/netconvertConfiguration.xsd">
+
+    <input>
+        <sumo-net-file value="C:\Users\nxf67027\Documents\CCPPC\highway\highway_segment.net.xml"/>
+    </input>
+
+    <output>
+        <output-file value="C:\Users\nxf67027\Documents\CCPPC\highway\highway_segment.net.xml"/>
+    </output>
+
+    <processing>
+        <geometry.min-radius.fix.railways value="false"/>
+        <geometry.max-grade.fix value="false"/>
+        <offset.disable-normalization value="true"/>
+        <lefthand value="false"/>
+    </processing>
+
+    <junctions>
+        <no-internal-links value="true"/>
+        <no-turnarounds value="true"/>
+        <junctions.corner-detail value="5"/>
+        <junctions.limit-turn-speed value="5.5"/>
+        <rectangular-lane-cut value="false"/>
+    </junctions>
+
+    <pedestrian>
+        <walkingareas value="false"/>
+    </pedestrian>
+
+    <netedit>
+        <route-files value="C:\Users\nxf67027\Documents\CCPPC\highway\highway.rou.xml"/>
+    </netedit>
+
+    <report>
+        <aggregate-warnings value="5"/>
+    </report>
+
+</configuration>
+-->
+
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    <vType id="DANGEROUS_CAR" guiShape="passenger" color="red" lcAssertive="10.0" lcImpatience="10.0" accel="5.2"/>
+    <vType id="NORMAL_CARS" vClass="passenger" guiShape="passenger" color="blue"/>
+    <route edges="e0lr" color="yellow" id="route_0"/>
+    <route edges="e0rl" color="yellow" id="route_1"/>
+    <flow id="flow_0" type="NORMAL_CARS" begin="0.00" departLane="random" route="route_0" end="3600.00" number="1800"/>
+    <flow id="flow_1" type="NORMAL_CARS" begin="0.00" departLane="random" route="route_1" end="3600.00" number="7200"/>
+    <vehicle id="vehicle_d" type="DANGEROUS_CAR" depart="20.00" arrivalPos="100.00" arrivalSpeed="0.00" route="route_1"/>
+</routes>
