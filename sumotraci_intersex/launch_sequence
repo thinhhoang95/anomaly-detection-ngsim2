@@ -1,0 +1,3 @@
+1. Run the generate_dset to collect traces from SUMO
+2. Run trajectory_preprocessor.ipynb to visualize and extract the traces for a specific edge
+3. Run vwp_edge_trajectories.R to perform unsupervised segmentation and FPCA decomposition

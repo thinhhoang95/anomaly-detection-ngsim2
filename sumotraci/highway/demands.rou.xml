@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+
+
+<!-- generated on 07/28/22 13:45:44 by Eclipse SUMO netedit Version 1.7.0
+
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/netconvertConfiguration.xsd">
+
+
+
+    <output>
+
+        <output-file value="C:\Users\nxf67027\Documents\CCPPC\highway-one\roads.net.xml"/>
+
+    </output>
+
+
+
+    <processing>
+
+        <offset.disable-normalization value="true"/>
+
+    </processing>
+
+
+
+    <junctions>
+
+        <no-turnarounds value="true"/>
+
+    </junctions>
+
+
+
+    <netedit>
+
+        <route-files value="C:\Users\nxf67027\Documents\CCPPC\highway-one\demands.rou.xml"/>
+
+    </netedit>
+
+
+
+    <report>
+
+        <aggregate-warnings value="5"/>
+
+    </report>
+
+
+
+</configuration>
+
+-->
+
+
+
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+
+    <route edges="gneE0" color="yellow" id="route_0"/>
+
+    <flow id="flow_0" begin="0.00" departLane="random" departSpeed="10.00" route="route_0" end="1800.00" probability="0.70"/>
+
+</routes>

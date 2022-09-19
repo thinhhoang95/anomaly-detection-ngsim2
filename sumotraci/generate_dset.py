@@ -14,7 +14,8 @@ else:
 
 import traci
 sumoBinary = "sumo-gui" # for Macbook Pro machine
-sumoCmd = [sumoBinary, "-c", "highway/highway.sumocfg"] # for Macbook Pro machine
+# sumoCmd = [sumoBinary, "-c", "highway/highway.sumocfg"] # for Macbook Pro machine
+sumoCmd = [sumoBinary, "-c", "C:\\Users\\nxf67027\\Documents\\anomaly-detection-ngsim\\sumotraci\\highway\\highway.sumocfg"] # for Windows machine
 traci.start(sumoCmd)
 
 # Delete the file if exists
@@ -26,7 +27,7 @@ except OSError:
     pass
 with open('trajectory.csv', 'a') as csvFile:
     step = 0
-    while step < 300:
+    while step < 3000:
         traci.simulationStep()
         listAllVehiclesId = traci.vehicle.getIDList()
         for vehId in listAllVehiclesId:
