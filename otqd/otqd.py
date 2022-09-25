@@ -2,7 +2,7 @@ import numpy as np
 import math
 
 class OTQD:
-    def __init__(self, info_a, mu_a, info_e2, pca_mean, pca_components, i_max = 1, i_spacing = 10):
+    def __init__(self, info_a, mu_a, info_e2, pca_mean, pca_components, i_max = 1, i_spacing = 10, n_basis = 2):
         # Hypothesis of nominal traffic: a Gaussian mixture
         self.info_a = info_a.copy()
         self.mu_a = mu_a.copy()
@@ -19,8 +19,8 @@ class OTQD:
         self.i_spacing = i_spacing
 
         # State variables
-        self.mu_pre_prime = np.zeros((i_max,2,1)) 
-        self.info_prime = np.zeros((i_max,2,2))
+        self.mu_pre_prime = np.zeros((i_max, n_basis, 1)) 
+        self.info_prime = np.zeros((i_max, n_basis, n_basis))
         self.preresidual = np.zeros((i_max))
         
         # Initialize state variables
@@ -120,6 +120,11 @@ class OTQD:
             covars[i,:,:] = covar_prime
             # print('---')
         return likelihood, covars
+
+    def get_posteriori(self, i=0):
+        covar_prime = np.linalg.inv(self.info_prime[i,:,:])
+        mu_prime = covar_prime @ self.mu_pre_prime[i,:,:]
+        return mu_prime, covar_prime
     
     def get_for_debug(self):
         return self.preresidual

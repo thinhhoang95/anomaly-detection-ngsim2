@@ -14,8 +14,8 @@ else:
 
 import traci
 sumoBinary = "sumo-gui" # for Macbook Pro machine
-# sumoCmd = [sumoBinary, "-c", "highway/highway.sumocfg"] # for Macbook Pro machine
-sumoCmd = [sumoBinary, "-c", "C:\\Users\\nxf67027\\Documents\\anomaly-detection-ngsim\\sumotraci\\highway\\highway.sumocfg"] # for Windows machine
+sumoCmd = [sumoBinary, "-c", "sumotraci/highway/highway.sumocfg"] # for Macbook Pro machine
+# sumoCmd = [sumoBinary, "-c", "C:\\Users\\nxf67027\\Documents\\anomaly-detection-ngsim\\sumotraci\\highway\\highway.sumocfg"] # for Windows machine
 traci.start(sumoCmd)
 
 # Delete the file if exists
