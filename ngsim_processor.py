@@ -12,6 +12,7 @@ class NGSIM_Processor:
         self.y_max = 0
         self.df = df
         self.max_trace_steps = 200
+        random.seed(6969)
 
     def set_patch(self, x_min, x_max, y_min, y_max):
         self.x_min = x_min
